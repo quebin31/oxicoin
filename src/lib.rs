@@ -1,3 +1,4 @@
+pub mod curve;
 pub mod field;
 pub mod utils;
 
@@ -19,6 +20,12 @@ pub enum Error {
 
     #[error("Invalid divition on different fields")]
     InvalidFieldDivition,
+
+    #[error("Point ({0}, {1}) is not on the curve")]
+    PointNotInTheCurve(isize, isize),
+
+    #[error("Received an invalid ec point")]
+    InvalidECPoint,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
