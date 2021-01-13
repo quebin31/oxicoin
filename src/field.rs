@@ -1,5 +1,6 @@
 use std::ops::{Add, Div, Mul, Sub};
 
+use crate::utils::pow_mod;
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,16 +33,13 @@ impl FieldElem {
         self.powu(self.prime - 2)
     }
 
+    #[inline]
     pub fn powu(self, exp: usize) -> Self {
-        let mut number = 1;
-        for _ in 0..exp {
-            number *= self.number;
-            number %= self.prime;
-        }
-
+        let number = pow_mod(self.number, exp, self.prime);
         Self { number, ..self }
     }
 
+    #[inline]
     pub fn powi(self, exp: isize) -> Self {
         // Rust's `%` operator is not the modulus operation.
         let exp = exp.rem_euclid(self.prime as isize - 1);

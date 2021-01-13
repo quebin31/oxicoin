@@ -1,4 +1,5 @@
 pub mod field;
+pub mod utils;
 
 use thiserror::Error;
 
