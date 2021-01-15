@@ -14,7 +14,7 @@ impl EllipticCurve {
     }
 
     pub fn contains(&self, x: isize, y: isize) -> bool {
-        y.pow(2) == x.pow(3) + self.a * x + self.b
+        y * y == (x * x * x) + self.a * x + self.b
     }
 }
 
@@ -93,8 +93,10 @@ impl Add for Point {
                 },
                 Self::Normal { x: x2, y: y2, .. },
             ) => match (x1 == x2, y1 == y2) {
+                // Same x axis, rhs is additive inverse of self and viceversa
                 (true, false) => Ok(Self::at_inf(curve)),
 
+                // Same x and y axis, self is equal to rhs
                 (true, true) => {
                     if y1 == 0 {
                         return Ok(Self::at_inf(curve));
@@ -107,6 +109,7 @@ impl Add for Point {
                     Self::new(x3, y3, curve)
                 }
 
+                // Different x axis, y axis doesn't matter in this case
                 _ => {
                     let slope = (y2 - y1) / (x2 - x1);
                     let x3 = slope * slope - x1 - x2;
