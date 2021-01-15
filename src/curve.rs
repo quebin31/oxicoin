@@ -95,7 +95,17 @@ impl Add for Point {
             ) => match (x1 == x2, y1 == y2) {
                 (true, false) => Ok(Self::at_inf(curve)),
 
-                (true, true) => todo!(),
+                (true, true) => {
+                    if y1 == 0 {
+                        return Ok(Self::at_inf(curve));
+                    }
+
+                    let slope = (3 * x1 * x1 + curve.a) / (2 * y1);
+                    let x3 = slope * slope - 2 * x1;
+                    let y3 = slope * (x1 - x3) - y1;
+
+                    Self::new(x3, y3, curve)
+                }
 
                 _ => {
                     let slope = (y2 - y1) / (x2 - x1);
@@ -122,11 +132,60 @@ mod tests {
 
     #[test]
     fn equality() -> Result<()> {
-        let a = Point::new(-1, -1, EllipticCurve::new(5, 7))?;
-        let b = Point::new(18, 77, EllipticCurve::new(5, 7))?;
+        let curve = EllipticCurve::new(5, 7);
+        let a = Point::new(-1, -1, curve)?;
+        let b = Point::new(18, 77, curve)?;
 
         assert_eq!(a, a);
         assert_ne!(a, b);
+
+        Ok(())
+    }
+
+    #[test]
+    fn addition_with_inf() -> Result<()> {
+        let curve = EllipticCurve::new(5, 7);
+        let a = Point::new(-1, -1, curve)?;
+        let inf = Point::at_inf(curve);
+
+        assert_eq!(a.add(inf)?, a);
+        assert_eq!(inf.add(a)?, a);
+
+        Ok(())
+    }
+
+    #[test]
+    fn addition_with_inverse() -> Result<()> {
+        let curve = EllipticCurve::new(5, 7);
+        let a = Point::new(-1, -1, curve)?;
+        let b = Point::new(-1, 1, curve)?;
+
+        assert_eq!(a.add(b)?, Point::at_inf(curve));
+        assert_eq!(b.add(a)?, Point::at_inf(curve));
+
+        Ok(())
+    }
+
+    #[test]
+    fn addition_diff_points() -> Result<()> {
+        let curve = EllipticCurve::new(5, 7);
+        let a = Point::new(-1, -1, curve)?;
+        let b = Point::new(2, 5, curve)?;
+        let c = Point::new(3, -7, curve)?;
+
+        assert_eq!(a.add(b)?, c);
+        assert_eq!(b.add(a)?, c);
+
+        Ok(())
+    }
+
+    #[test]
+    fn addition_equal_points() -> Result<()> {
+        let curve = EllipticCurve::new(5, 7);
+        let a = Point::new(-1, -1, curve)?;
+        let b = Point::new(18, 77, curve)?;
+
+        assert_eq!(a.add(a)?, b);
 
         Ok(())
     }
