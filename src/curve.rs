@@ -20,57 +20,53 @@ impl EllipticCurve {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Point {
-    AtInfinity {
-        curve: EllipticCurve,
-    },
-
-    Normal {
-        x: isize,
-        y: isize,
-        curve: EllipticCurve,
-    },
+    AtInfinity,
+    Normal(isize, isize, EllipticCurve),
 }
 
 impl Point {
     pub fn new(x: isize, y: isize, curve: EllipticCurve) -> Result<Self> {
         if curve.contains(x, y) {
-            Ok(Self::Normal { x, y, curve })
+            Ok(Self::Normal(x, y, curve))
         } else {
             Err(Error::PointNotInTheCurve(x, y))
         }
     }
 
-    pub fn at_inf(curve: EllipticCurve) -> Self {
-        Self::AtInfinity { curve }
+    pub fn at_infinity() -> Self {
+        Self::AtInfinity
     }
 
     pub fn x(&self) -> Option<isize> {
         match *self {
             Point::AtInfinity { .. } => None,
-            Point::Normal { x, .. } => Some(x),
+            Point::Normal(x, _, _) => Some(x),
         }
     }
 
     pub fn y(&self) -> Option<isize> {
         match *self {
             Point::AtInfinity { .. } => None,
-            Point::Normal { y, .. } => Some(y),
+            Point::Normal(_, y, _) => Some(y),
         }
     }
 
-    pub fn curve(&self) -> EllipticCurve {
+    pub fn curve(&self) -> Option<EllipticCurve> {
         match *self {
-            Point::AtInfinity { curve } => curve,
-            Point::Normal { curve, .. } => curve,
+            Point::AtInfinity => None,
+            Point::Normal(_, _, curve) => Some(curve),
         }
     }
 
     pub fn same_curve(&self, other: &Self) -> bool {
-        self.curve() == other.curve()
+        match (self.curve(), other.curve()) {
+            (Some(curve1), Some(curve2)) => curve1 == curve2,
+            _ => true, // One is a point at infinity
+        }
     }
 
     pub fn is_point_at_inf(&self) -> bool {
-        matches!(self, Self::AtInfinity { .. })
+        matches!(self, Self::AtInfinity)
     }
 }
 
@@ -83,23 +79,16 @@ impl Add for Point {
         }
 
         match (self, rhs) {
-            (Self::AtInfinity { .. }, _) => Ok(rhs),
-            (_, Self::AtInfinity { .. }) => Ok(self),
-            (
-                Self::Normal {
-                    x: x1,
-                    y: y1,
-                    curve,
-                },
-                Self::Normal { x: x2, y: y2, .. },
-            ) => match (x1 == x2, y1 == y2) {
+            (Self::AtInfinity, _) => Ok(rhs),
+            (_, Self::AtInfinity) => Ok(self),
+            (Self::Normal(x1, y1, curve), Self::Normal(x2, y2, _)) => match (x1 == x2, y1 == y2) {
                 // Same x axis, rhs is additive inverse of self and viceversa
-                (true, false) => Ok(Self::at_inf(curve)),
+                (true, false) => Ok(Self::at_infinity()),
 
                 // Same x and y axis, self is equal to rhs
                 (true, true) => {
                     if y1 == 0 {
-                        return Ok(Self::at_inf(curve));
+                        return Ok(Self::at_infinity());
                     }
 
                     let slope = (3 * x1 * x1 + curve.a) / (2 * y1);
@@ -149,7 +138,7 @@ mod tests {
     fn addition_with_inf() -> Result<()> {
         let curve = EllipticCurve::new(5, 7);
         let a = Point::new(-1, -1, curve)?;
-        let inf = Point::at_inf(curve);
+        let inf = Point::at_infinity();
 
         assert_eq!(a.add(inf)?, a);
         assert_eq!(inf.add(a)?, a);
@@ -163,8 +152,8 @@ mod tests {
         let a = Point::new(-1, -1, curve)?;
         let b = Point::new(-1, 1, curve)?;
 
-        assert_eq!(a.add(b)?, Point::at_inf(curve));
-        assert_eq!(b.add(a)?, Point::at_inf(curve));
+        assert_eq!(a.add(b)?, Point::at_infinity());
+        assert_eq!(b.add(a)?, Point::at_infinity());
 
         Ok(())
     }
