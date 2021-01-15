@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +35,38 @@ impl ECPoint {
 
             _ => Err(Error::InvalidECPoint),
         }
+    }
+
+    pub fn same_curve(&self, other: &Self) -> bool {
+        self.a == other.a && self.b == other.b
+    }
+}
+
+impl Add for ECPoint {
+    type Output = Result<Self>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        if !self.same_curve(&rhs) {
+            return Err(Error::PointsNotInTheSameCurve);
+        }
+
+        if self.x.is_none() && self.y.is_none() {
+            return Ok(rhs);
+        }
+
+        if rhs.x.is_none() && rhs.y.is_none() {
+            return Ok(self);
+        }
+
+        if self.x == rhs.x {
+            return Ok(Self {
+                x: None,
+                y: None,
+                ..self
+            });
+        }
+
+        todo!()
     }
 }
 

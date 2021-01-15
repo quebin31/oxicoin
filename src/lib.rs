@@ -26,6 +26,9 @@ pub enum Error {
 
     #[error("Received an invalid ec point")]
     InvalidECPoint,
+
+    #[error("Points are not in the same curve")]
+    PointsNotInTheSameCurve,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
