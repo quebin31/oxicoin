@@ -79,8 +79,11 @@ impl Add for Point {
         }
 
         match (self, rhs) {
+            // Additive identity
             (Self::AtInfinity, _) => Ok(rhs),
             (_, Self::AtInfinity) => Ok(self),
+
+            // Normal addition between points
             (Self::Normal(x1, y1, curve), Self::Normal(x2, y2, _)) => match (x1 == x2, y1 == y2) {
                 // Same x axis, rhs is additive inverse of self and viceversa
                 (true, false) => Ok(Self::at_infinity()),
