@@ -3,46 +3,78 @@ use std::ops::Add;
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ECPoint {
+pub struct EllipticCurve {
     a: isize,
     b: isize,
-    x: Option<isize>,
-    y: Option<isize>,
 }
 
-impl ECPoint {
-    pub fn new<U>(x: U, y: U, a: isize, b: isize) -> Result<Self>
-    where
-        U: Into<Option<isize>>,
-    {
-        let x = x.into();
-        let y = y.into();
+impl EllipticCurve {
+    pub fn new(a: isize, b: isize) -> Self {
+        Self { a, b }
+    }
 
-        match (x, y) {
-            (None, None) => Ok(Self { a, b, x, y }),
-            (Some(x), Some(y)) => {
-                if y.pow(2) != x.pow(3) + a * x + b {
-                    Ok(Self {
-                        a,
-                        b,
-                        x: Some(x),
-                        y: Some(y),
-                    })
-                } else {
-                    Err(Error::PointNotInTheCurve(x, y))
-                }
-            }
+    pub fn contains(&self, x: isize, y: isize) -> bool {
+        y.pow(2) == x.pow(3) + self.a * x + self.b
+    }
+}
 
-            _ => Err(Error::InvalidECPoint),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Point {
+    AtInfinity {
+        curve: EllipticCurve,
+    },
+
+    Normal {
+        x: isize,
+        y: isize,
+        curve: EllipticCurve,
+    },
+}
+
+impl Point {
+    pub fn new(x: isize, y: isize, curve: EllipticCurve) -> Result<Self> {
+        if curve.contains(x, y) {
+            Ok(Self::Normal { x, y, curve })
+        } else {
+            Err(Error::PointNotInTheCurve(x, y))
+        }
+    }
+
+    pub fn at_inf(curve: EllipticCurve) -> Self {
+        Self::AtInfinity { curve }
+    }
+
+    pub fn x(&self) -> Option<isize> {
+        match *self {
+            Point::AtInfinity { .. } => None,
+            Point::Normal { x, .. } => Some(x),
+        }
+    }
+
+    pub fn y(&self) -> Option<isize> {
+        match *self {
+            Point::AtInfinity { .. } => None,
+            Point::Normal { y, .. } => Some(y),
+        }
+    }
+
+    pub fn curve(&self) -> EllipticCurve {
+        match *self {
+            Point::AtInfinity { curve } => curve,
+            Point::Normal { curve, .. } => curve,
         }
     }
 
     pub fn same_curve(&self, other: &Self) -> bool {
-        self.a == other.a && self.b == other.b
+        self.curve() == other.curve()
+    }
+
+    pub fn is_point_at_inf(&self) -> bool {
+        matches!(self, Self::AtInfinity { .. })
     }
 }
 
-impl Add for ECPoint {
+impl Add for Point {
     type Output = Result<Self>;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -50,23 +82,30 @@ impl Add for ECPoint {
             return Err(Error::PointsNotInTheSameCurve);
         }
 
-        if self.x.is_none() && self.y.is_none() {
-            return Ok(rhs);
-        }
+        match (self, rhs) {
+            (Self::AtInfinity { .. }, _) => Ok(rhs),
+            (_, Self::AtInfinity { .. }) => Ok(self),
+            (
+                Self::Normal {
+                    x: x1,
+                    y: y1,
+                    curve,
+                },
+                Self::Normal { x: x2, y: y2, .. },
+            ) => match (x1 == x2, y1 == y2) {
+                (true, false) => Ok(Self::at_inf(curve)),
 
-        if rhs.x.is_none() && rhs.y.is_none() {
-            return Ok(self);
-        }
+                (true, true) => todo!(),
 
-        if self.x == rhs.x {
-            return Ok(Self {
-                x: None,
-                y: None,
-                ..self
-            });
-        }
+                _ => {
+                    let slope = (y2 - y1) / (x2 - x1);
+                    let x3 = slope * slope - x1 - x2;
+                    let y3 = slope * (x1 - x3) - y1;
 
-        todo!()
+                    Self::new(x3, y3, curve)
+                }
+            },
+        }
     }
 }
 
@@ -77,14 +116,14 @@ mod tests {
 
     #[test]
     fn not_in_curve() {
-        let res = ECPoint::new(-1, -2, 5, 7);
+        let res = Point::new(-1, -2, EllipticCurve::new(5, 7));
         assert!(res.is_err());
     }
 
     #[test]
     fn equality() -> Result<()> {
-        let a = ECPoint::new(-1, -1, 5, 7)?;
-        let b = ECPoint::new(18, 77, 5, 7)?;
+        let a = Point::new(-1, -1, EllipticCurve::new(5, 7))?;
+        let b = Point::new(18, 77, EllipticCurve::new(5, 7))?;
 
         assert_eq!(a, a);
         assert_ne!(a, b);
