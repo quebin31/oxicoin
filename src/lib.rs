@@ -21,8 +21,8 @@ pub enum Error {
     #[error("Invalid divition on different fields")]
     InvalidFieldDivition,
 
-    #[error("Point ({0}, {1}) is not on the curve")]
-    PointNotInTheCurve(isize, isize),
+    #[error("Point is not on the curve")]
+    PointNotInTheCurve,
 
     #[error("Received an invalid ec point")]
     InvalidECPoint,
