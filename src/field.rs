@@ -1,5 +1,7 @@
 use std::ops::{Add, Div, Mul, Sub};
 
+use num_traits::Pow;
+
 use crate::utils::pow_mod;
 use crate::{Error, Result};
 
@@ -30,20 +32,26 @@ impl FieldElem {
     #[inline]
     pub fn mul_inv(self) -> Self {
         // Fermat's little theorem
-        self.powu(self.prime - 2)
+        self.pow(self.prime - 2)
     }
+}
 
-    #[inline]
-    pub fn powu(self, exp: usize) -> Self {
+impl Pow<usize> for FieldElem {
+    type Output = Self;
+
+    fn pow(self, exp: usize) -> Self::Output {
         let number = pow_mod(self.number, exp, self.prime);
         Self { number, ..self }
     }
+}
 
-    #[inline]
-    pub fn powi(self, exp: isize) -> Self {
+impl Pow<isize> for FieldElem {
+    type Output = Self;
+
+    fn pow(self, exp: isize) -> Self::Output {
         // Rust's `%` operator is not the modulus operation.
         let exp = exp.rem_euclid(self.prime as isize - 1);
-        self.powu(exp as usize)
+        self.pow(exp as usize)
     }
 }
 
@@ -150,9 +158,11 @@ mod tests {
 
     #[test]
     fn exponentiation() -> Result<()> {
+        use num_traits::Pow;
+
         let a = FieldElem::new(7, 13)?;
-        let b = a.powu(3);
-        let c = a.powi(-3);
+        let b = a.pow(3usize);
+        let c = a.pow(-3isize);
 
         assert_eq!(b, FieldElem::new(5, 13)?);
         assert_eq!(c, FieldElem::new(8, 13)?);
