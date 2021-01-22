@@ -1,35 +1,49 @@
-use std::ops::Add;
+use std::error::Error as StdError;
 
-use crate::{Error, Result};
+use num_traits::Pow;
+
+use crate::traits::{IsZero, MayAdd, MayDiv, MayMul, MaySub};
+use crate::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EllipticCurve {
-    a: isize,
-    b: isize,
+pub struct EllipticCurve<T> {
+    a: T,
+    b: T,
 }
 
-impl EllipticCurve {
-    pub fn new(a: isize, b: isize) -> Self {
+impl<T> EllipticCurve<T> {
+    pub fn new(a: T, b: T) -> Self {
         Self { a, b }
     }
 
-    pub fn contains(&self, x: isize, y: isize) -> bool {
-        y * y == (x * x * x) + self.a * x + self.b
+    pub fn contains<E>(&self, x: T, y: T) -> Result<bool, E>
+    where
+        T: Copy + Eq,
+        T: Pow<usize, Output = T>,
+        T: MayMul<Output = T, Error = E> + MayAdd<Output = T, Error = E>,
+    {
+        Ok(y.pow(2) == x.pow(3).may_add(self.a.may_mul(x)?).may_add(self.b)?)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Point {
+pub enum Point<T> {
     AtInfinity,
-    Normal(isize, isize, EllipticCurve),
+    Normal(T, T, EllipticCurve<T>),
 }
 
-impl Point {
-    pub fn new(x: isize, y: isize, curve: EllipticCurve) -> Result<Self> {
-        if curve.contains(x, y) {
+impl<T> Point<T> {
+    pub fn new<E>(x: T, y: T, curve: EllipticCurve<T>) -> Result<Self, Error>
+    where
+        E: StdError + Send + Sync + 'static,
+        T: Copy + Eq,
+        T: Pow<usize, Output = T>,
+        T: MayMul<Output = T, Error = E> + MayAdd<Output = T, Error = E>,
+    {
+        if curve.contains(x, y).map_err(Error::from_err)? {
             Ok(Self::Normal(x, y, curve))
         } else {
-            Err(Error::PointNotInTheCurve(x, y))
+            Err(Error::PointNotInTheCurve)
         }
     }
 
@@ -37,28 +51,31 @@ impl Point {
         Self::AtInfinity
     }
 
-    pub fn x(&self) -> Option<isize> {
-        match *self {
+    pub fn x(&self) -> Option<&T> {
+        match self {
             Point::AtInfinity { .. } => None,
             Point::Normal(x, _, _) => Some(x),
         }
     }
 
-    pub fn y(&self) -> Option<isize> {
-        match *self {
+    pub fn y(&self) -> Option<&T> {
+        match self {
             Point::AtInfinity { .. } => None,
             Point::Normal(_, y, _) => Some(y),
         }
     }
 
-    pub fn curve(&self) -> Option<EllipticCurve> {
-        match *self {
+    pub fn curve(&self) -> Option<&EllipticCurve<T>> {
+        match self {
             Point::AtInfinity => None,
             Point::Normal(_, _, curve) => Some(curve),
         }
     }
 
-    pub fn same_curve(&self, other: &Self) -> bool {
+    pub fn same_curve(&self, other: &Self) -> bool
+    where
+        T: Eq,
+    {
         match (self.curve(), other.curve()) {
             (Some(curve1), Some(curve2)) => curve1 == curve2,
             _ => true, // One is a point at infinity
@@ -70,10 +87,20 @@ impl Point {
     }
 }
 
-impl Add for Point {
-    type Output = Result<Self>;
+impl<T, E> MayAdd for Point<T>
+where
+    E: StdError + Send + Sync + 'static,
+    T: Copy + Eq,
+    T: IsZero,
+    T: Pow<usize, Output = T>,
+    T: MayAdd<Output = T, Error = E> + MaySub<Output = T, Error = E>,
+    T: MayMul<Output = T, Error = E> + MayDiv<Output = T, Error = E>,
+    T: MayMul<usize, Output = T, Error = E>, // scalar mul
+{
+    type Output = Self;
+    type Error = Error;
 
-    fn add(self, rhs: Self) -> Self::Output {
+    fn may_add(self, rhs: Self) -> Result<Self::Output, Self::Error> {
         if !self.same_curve(&rhs) {
             return Err(Error::PointsNotInTheSameCurve);
         }
@@ -90,22 +117,43 @@ impl Add for Point {
 
                 // Same x and y axis, self is equal to rhs
                 (true, true) => {
-                    if y1 == 0 {
+                    if y1.is_zero() {
                         return Ok(Self::at_infinity());
                     }
 
-                    let slope = (3 * x1 * x1 + curve.a) / (2 * y1);
-                    let x3 = slope * slope - 2 * x1;
-                    let y3 = slope * (x1 - x3) - y1;
+                    let slope = (x1.pow(2usize).may_mul(3).may_add(curve.a))
+                        .may_div(y1.may_mul(2))
+                        .map_err(Error::from_err)?;
+
+                    let x3 = Ok(slope.pow(2usize))
+                        .may_sub(x1.may_mul(2))
+                        .map_err(Error::from_err)?;
+
+                    let y3 = slope
+                        .may_mul(x1.may_sub(x3))
+                        .may_sub(y1)
+                        .map_err(Error::from_err)?;
 
                     Self::new(x3, y3, curve)
                 }
 
                 // Different x axis, y axis doesn't matter in this case
                 _ => {
-                    let slope = (y2 - y1) / (x2 - x1);
-                    let x3 = slope * slope - x1 - x2;
-                    let y3 = slope * (x1 - x3) - y1;
+                    let slope = y2
+                        .may_sub(y1)
+                        .may_div(x2.may_sub(x1))
+                        .map_err(Error::from_err)?;
+
+                    let x3 = slope
+                        .may_mul(slope)
+                        .may_sub(x1)
+                        .may_sub(x2)
+                        .map_err(Error::from_err)?;
+
+                    let y3 = slope
+                        .may_mul(x1.may_sub(x3))
+                        .may_sub(y1)
+                        .map_err(Error::from_err)?;
 
                     Self::new(x3, y3, curve)
                 }
@@ -131,9 +179,7 @@ mod tests {
         let a = Point::new(-1, -1, curve)?;
         let b = Point::new(18, 77, curve)?;
 
-        assert_eq!(a, a);
         assert_ne!(a, b);
-
         Ok(())
     }
 
@@ -143,8 +189,8 @@ mod tests {
         let a = Point::new(-1, -1, curve)?;
         let inf = Point::at_infinity();
 
-        assert_eq!(a.add(inf)?, a);
-        assert_eq!(inf.add(a)?, a);
+        assert_eq!(a.may_add(inf)?, a);
+        assert_eq!(inf.may_add(a)?, a);
 
         Ok(())
     }
@@ -155,8 +201,8 @@ mod tests {
         let a = Point::new(-1, -1, curve)?;
         let b = Point::new(-1, 1, curve)?;
 
-        assert_eq!(a.add(b)?, Point::at_infinity());
-        assert_eq!(b.add(a)?, Point::at_infinity());
+        assert_eq!(a.may_add(b)?, Point::at_infinity());
+        assert_eq!(b.may_add(a)?, Point::at_infinity());
 
         Ok(())
     }
@@ -168,8 +214,8 @@ mod tests {
         let b = Point::new(2, 5, curve)?;
         let c = Point::new(3, -7, curve)?;
 
-        assert_eq!(a.add(b)?, c);
-        assert_eq!(b.add(a)?, c);
+        assert_eq!(a.may_add(b)?, c);
+        assert_eq!(b.may_add(a)?, c);
 
         Ok(())
     }
@@ -180,8 +226,37 @@ mod tests {
         let a = Point::new(-1, -1, curve)?;
         let b = Point::new(18, 77, curve)?;
 
-        assert_eq!(a.add(a)?, b);
+        assert_eq!(a.may_add(a)?, b);
 
+        Ok(())
+    }
+
+    #[test]
+    fn addition_with_field_element() -> Result<()> {
+        use crate::field::FieldElement;
+
+        let prime = 223;
+        let curve = EllipticCurve::new(FieldElement::new(0, prime)?, FieldElement::new(7, prime)?);
+
+        let a = Point::new(
+            FieldElement::new(192, prime)?,
+            FieldElement::new(105, prime)?,
+            curve,
+        )?;
+
+        let b = Point::new(
+            FieldElement::new(17, prime)?,
+            FieldElement::new(56, prime)?,
+            curve,
+        )?;
+
+        let c = Point::new(
+            FieldElement::new(170, prime)?,
+            FieldElement::new(142, prime)?,
+            curve,
+        )?;
+
+        assert_eq!(c, a.may_add(b)?);
         Ok(())
     }
 }
