@@ -1,19 +1,18 @@
-use std::ops::{Add, Div, Mul, Sub};
-
 use num_traits::Pow;
 
+use crate::traits::{IsZero, MayAdd, MayDiv, MayMul, MaySub};
 use crate::utils::pow_mod;
-use crate::{Error, Result};
+use crate::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FieldElem {
+pub struct FieldElement {
     number: usize,
     prime: usize,
 }
 
-impl FieldElem {
+impl FieldElement {
     /// Build a new field element `number` on F_{prime}.
-    pub fn new(number: usize, prime: usize) -> Result<Self> {
+    pub fn new(number: usize, prime: usize) -> Result<Self, Error> {
         if number >= prime {
             Err(Error::InvalidFieldNumber(number, prime))
         } else {
@@ -36,7 +35,13 @@ impl FieldElem {
     }
 }
 
-impl Pow<usize> for FieldElem {
+impl IsZero for FieldElement {
+    fn is_zero(&self) -> bool {
+        self.number == 0
+    }
+}
+
+impl Pow<usize> for FieldElement {
     type Output = Self;
 
     fn pow(self, exp: usize) -> Self::Output {
@@ -45,7 +50,7 @@ impl Pow<usize> for FieldElem {
     }
 }
 
-impl Pow<isize> for FieldElem {
+impl Pow<isize> for FieldElement {
     type Output = Self;
 
     fn pow(self, exp: isize) -> Self::Output {
@@ -55,11 +60,12 @@ impl Pow<isize> for FieldElem {
     }
 }
 
-impl Add for FieldElem {
-    type Output = Result<Self>;
+impl MayAdd for FieldElement {
+    type Output = Self;
+    type Error = Error;
 
     #[inline]
-    fn add(self, rhs: Self) -> Self::Output {
+    fn may_add(self, rhs: Self) -> Result<Self::Output, Self::Error> {
         if self.prime != rhs.prime {
             Err(Error::InvalidFieldAddition)
         } else {
@@ -69,24 +75,26 @@ impl Add for FieldElem {
     }
 }
 
-impl Sub for FieldElem {
-    type Output = Result<Self>;
+impl MaySub for FieldElement {
+    type Output = Self;
+    type Error = Error;
 
     #[inline]
-    fn sub(self, rhs: Self) -> Self::Output {
+    fn may_sub(self, rhs: Self) -> Result<Self::Output, Self::Error> {
         if self.prime != rhs.prime {
             Err(Error::InvalidFieldSubstraction)
         } else {
-            self.add(rhs.add_inv())
+            self.may_add(rhs.add_inv())
         }
     }
 }
 
-impl Mul for FieldElem {
-    type Output = Result<Self>;
+impl MayMul for FieldElement {
+    type Output = Self;
+    type Error = Error;
 
     #[inline]
-    fn mul(self, rhs: Self) -> Self::Output {
+    fn may_mul(self, rhs: Self) -> Result<Self::Output, Self::Error> {
         if self.prime != rhs.prime {
             Err(Error::InvalidFieldMultiplication)
         } else {
@@ -97,15 +105,27 @@ impl Mul for FieldElem {
     }
 }
 
-impl Div for FieldElem {
-    type Output = Result<Self>;
+impl MayMul<usize> for FieldElement {
+    type Output = Self;
+    type Error = Error;
 
     #[inline]
-    fn div(self, rhs: Self) -> Self::Output {
+    fn may_mul(self, rhs: usize) -> Result<Self::Output, Self::Error> {
+        let this = Self::new(rhs, self.prime)?;
+        this.may_mul(self)
+    }
+}
+
+impl MayDiv for FieldElement {
+    type Output = Self;
+    type Error = Error;
+
+    #[inline]
+    fn may_div(self, rhs: Self) -> Result<Self::Output, Self::Error> {
         if self.prime != rhs.prime {
             Err(Error::InvalidFieldDivition)
         } else {
-            self.mul(rhs.mul_inv())
+            self.may_mul(rhs.mul_inv())
         }
     }
 }
@@ -117,42 +137,40 @@ mod tests {
 
     #[test]
     fn equality() -> Result<()> {
-        let a = FieldElem::new(7, 13)?;
-        let b = FieldElem::new(6, 13)?;
+        let a = FieldElement::new(7, 13)?;
+        let b = FieldElement::new(6, 13)?;
 
         assert_ne!(a, b);
-        assert_eq!(b, b);
-
         Ok(())
     }
 
     #[test]
     fn addition() -> Result<()> {
-        let a = FieldElem::new(6, 13)?;
-        let b = FieldElem::new(7, 13)?;
-        let c = a.add(b)?;
+        let a = FieldElement::new(6, 13)?;
+        let b = FieldElement::new(7, 13)?;
+        let c = a.may_add(b)?;
 
-        assert_eq!(c, FieldElem::new(0, 13)?);
+        assert_eq!(c, FieldElement::new(0, 13)?);
         Ok(())
     }
 
     #[test]
     fn substraction() -> Result<()> {
-        let a = FieldElem::new(9, 57)?;
-        let b = FieldElem::new(29, 57)?;
-        let c = a.sub(b)?;
+        let a = FieldElement::new(9, 57)?;
+        let b = FieldElement::new(29, 57)?;
+        let c = a.may_sub(b)?;
 
-        assert_eq!(c, FieldElem::new(37, 57)?);
+        assert_eq!(c, FieldElement::new(37, 57)?);
         Ok(())
     }
 
     #[test]
     fn multiplication() -> Result<()> {
-        let a = FieldElem::new(3, 13)?;
-        let b = FieldElem::new(12, 13)?;
-        let c = a.mul(b)?;
+        let a = FieldElement::new(3, 13)?;
+        let b = FieldElement::new(12, 13)?;
+        let c = a.may_mul(b)?;
 
-        assert_eq!(c, FieldElem::new(10, 13)?);
+        assert_eq!(c, FieldElement::new(10, 13)?);
         Ok(())
     }
 
@@ -160,22 +178,22 @@ mod tests {
     fn exponentiation() -> Result<()> {
         use num_traits::Pow;
 
-        let a = FieldElem::new(7, 13)?;
+        let a = FieldElement::new(7, 13)?;
         let b = a.pow(3usize);
         let c = a.pow(-3isize);
 
-        assert_eq!(b, FieldElem::new(5, 13)?);
-        assert_eq!(c, FieldElem::new(8, 13)?);
+        assert_eq!(b, FieldElement::new(5, 13)?);
+        assert_eq!(c, FieldElement::new(8, 13)?);
         Ok(())
     }
 
     #[test]
     fn divition() -> Result<()> {
-        let a = FieldElem::new(2, 19)?;
-        let b = FieldElem::new(7, 19)?;
-        let c = a.div(b)?;
+        let a = FieldElement::new(2, 19)?;
+        let b = FieldElement::new(7, 19)?;
+        let c = a.may_div(b)?;
 
-        assert_eq!(c, FieldElem::new(3, 19)?);
+        assert_eq!(c, FieldElement::new(3, 19)?);
         Ok(())
     }
 }
