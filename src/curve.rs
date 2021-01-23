@@ -100,14 +100,14 @@ where
     type Output = Self;
     type Error = Error;
 
-    fn may_add(self, rhs: Self) -> Result<Self::Output, Self::Error> {
-        if !self.same_curve(&rhs) {
+    fn may_add(self, other: Self) -> Result<Self::Output, Self::Error> {
+        if !self.same_curve(&other) {
             return Err(Error::PointsNotInTheSameCurve);
         }
 
-        match (self, rhs) {
+        match (self, other) {
             // Additive identity
-            (Self::AtInfinity, _) => Ok(rhs),
+            (Self::AtInfinity, _) => Ok(other),
             (_, Self::AtInfinity) => Ok(self),
 
             // Normal addition between points
@@ -159,6 +159,29 @@ where
                 }
             },
         }
+    }
+}
+
+impl<T, E> MayMul<usize> for Point<T>
+where
+    E: StdError + Send + Sync + 'static,
+    T: Copy + Eq,
+    T: IsZero,
+    T: Pow<usize, Output = T>,
+    T: MayAdd<Output = T, Error = E> + MaySub<Output = T, Error = E>,
+    T: MayMul<Output = T, Error = E> + MayDiv<Output = T, Error = E>,
+    T: MayMul<usize, Output = T, Error = E>, // scalar mul
+{
+    type Output = Self;
+    type Error = Error;
+
+    fn may_mul(self, other: usize) -> Result<Self::Output, Self::Error> {
+        let mut result = self;
+        for _ in 0..other - 1 {
+            result = result.may_add(self)?;
+        }
+
+        Ok(result)
     }
 }
 
@@ -257,6 +280,31 @@ mod tests {
         )?;
 
         assert_eq!(c, a.may_add(b)?);
+        Ok(())
+    }
+
+    #[test]
+    fn scalar_multiplication_with_field_element() -> Result<()> {
+        use crate::field::FieldElement;
+
+        let prime = 223;
+        let curve = EllipticCurve::new(FieldElement::new(0, prime)?, FieldElement::new(7, prime)?);
+
+        let a = Point::new(
+            FieldElement::new(47, prime)?,
+            FieldElement::new(71, prime)?,
+            curve,
+        )?;
+
+        /*
+        let b = Point::new(
+            FieldElement::new(47, prime)?,
+            FieldElement::new(152, prime)?,
+            curve,
+        )?;
+        */
+
+        println!("{:?}", a.may_mul(2)?);
         Ok(())
     }
 }
