@@ -176,8 +176,9 @@ where
     type Error = Error;
 
     fn may_mul(self, other: usize) -> Result<Self::Output, Self::Error> {
-        let mut result = self;
-        for _ in 0..other - 1 {
+        let mut result = Point::at_infinity();
+
+        for _ in 0..other {
             result = result.may_add(self)?;
         }
 
@@ -296,15 +297,14 @@ mod tests {
             curve,
         )?;
 
-        /*
         let b = Point::new(
             FieldElement::new(47, prime)?,
             FieldElement::new(152, prime)?,
             curve,
         )?;
-        */
 
-        println!("{:?}", a.may_mul(2)?);
+        assert_eq!(b, a.may_mul(20)?);
+        assert_eq!(Point::at_infinity(), b.may_add(a)?);
         Ok(())
     }
 }
