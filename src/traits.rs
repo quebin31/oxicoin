@@ -1,190 +1,226 @@
-use std::ops::{Add, Div, Mul, Sub};
+pub mod zero {
+    use num_traits::Zero;
 
-use num_traits::Zero;
-
-use crate::Infallible;
-
-pub trait IsZero {
-    fn is_zero(&self) -> bool;
-}
-
-impl<T> IsZero for T
-where
-    T: Zero,
-{
-    fn is_zero(&self) -> bool {
-        <T as Zero>::is_zero(&self)
+    /// Check wether self is zero, more relaxed than `num_traits::Zero`
+    pub trait IsZero {
+        fn is_zero(&self) -> bool;
     }
-}
 
-macro_rules! define_may_traits {
-    ($($trait:ident, $met:ident,)*) => {
-        $(
-            pub trait $trait<Rhs = Self> {
-                type Output;
-                type Error;
-
-                fn $met(self, other: Rhs) -> Result<Self::Output, Self::Error>;
-            }
-        )*
-    };
-}
-
-macro_rules! prim_impl_may_traits {
-    ($type:ty) => {
-        prim_impl_may_traits! {
-            MayAdd, may_add, $type, add,
-            MaySub, may_sub, $type, sub,
-            MayMul, may_mul, $type, mul,
-            MayDiv, may_div, $type, div,
+    /// Implement for all `T` that already implement `num_traits::Zero`
+    impl<T> IsZero for T
+    where
+        T: Zero,
+    {
+        fn is_zero(&self) -> bool {
+            <T as Zero>::is_zero(&self)
         }
-    };
+    }
+}
 
-    ($($trait:ident, $tmet: ident, $type:ty, $pmet:ident,)*) => {
-        $(
-            impl $trait for $type
-            {
-                type Output = $type;
+pub mod fragile {
+    use std::convert::Infallible;
+    use std::ops::{Add, Div, Mul, Sub};
+
+    use num_bigint::{BigInt, BigUint};
+
+    macro_rules! fragile_traits {
+        ($($trait:ident does $met:ident,)*) => {
+            $(
+                pub trait $trait<Rhs = Self> {
+                    type Ok;
+                    type Error;
+
+                    fn $met(self, rhs: Rhs) -> Result<Self::Ok, Self::Error>;
+                }
+            )*
+        };
+    }
+
+    fragile_traits! {
+        FragileAdd does fragile_add,
+        FragileSub does fragile_sub,
+        FragileMul does fragile_mul,
+        FragileDiv does fragile_div,
+    }
+
+    macro_rules! impl_fragile {
+        (for non-fragile $type:ty) => {
+            impl_fragile! {
+                for copyable
+                FragileAdd, fragile_add, $type, add,
+                FragileSub, fragile_sub, $type, sub,
+                FragileMul, fragile_mul, $type, mul,
+                FragileDiv, fragile_div, $type, div,
+            }
+        };
+
+        (for non-fragile non-copyable $type:ty ) => {
+            impl_fragile! {
+                for non-copyable
+                FragileAdd, fragile_add, $type, add,
+                FragileSub, fragile_sub, $type, sub,
+                FragileMul, fragile_mul, $type, mul,
+                FragileDiv, fragile_div, $type, div,
+            }
+        };
+
+        (for copyable $($trait:ident, $trait_met: ident, $type:ty, $type_met:ident,)*) => {
+            $(
+                impl $trait for $type {
+                    type Ok = $type;
+                    type Error = Infallible;
+
+                    #[inline]
+                    fn $trait_met(self, rhs: $type) -> Result<Self::Ok, Self::Error> {
+                        Ok(self.$type_met(rhs))
+                    }
+                }
+
+                forward_fragile_impl!(for copyable $type => $trait, $trait_met, Infallible);
+            )*
+        };
+
+        (for non-copyable $($trait:ident, $trait_met: ident, $type:ty, $type_met:ident,)*) => {
+            $(
+                impl<'a, 'b> $trait<&'a $type> for &'b $type {
+                    type Ok = $type;
+                    type Error = Infallible;
+
+                    #[inline]
+                    fn $trait_met(self, rhs: &'a $type) -> Result<Self::Ok, Self::Error> {
+                        Ok(self.$type_met(rhs))
+                    }
+                }
+
+                forward_fragile_impl!(for non-copyable $type => $trait, $trait_met, Infallible);
+            )*
+        };
+    }
+
+    #[macro_export]
+    macro_rules! forward_fragile_impl {
+        (for copyable $type:ty => $trait:ident, $trait_met: ident, $err:path) => {
+            impl<'a> $trait<$type> for &'a $type {
+                type Ok = $type;
+                type Error = $err;
+
+                #[inline]
+                fn $trait_met(self, rhs: $type) -> Result<Self::Ok, Self::Error> {
+                    $trait::$trait_met(*self, rhs)
+                }
+            }
+
+            impl<'a> $trait<&'a $type> for $type {
+                type Ok = $type;
+                type Error = $err;
+
+                #[inline]
+                fn $trait_met(self, rhs: &'a $type) -> Result<Self::Ok, Self::Error> {
+                    $trait::$trait_met(self, *rhs)
+                }
+            }
+
+            impl<'a, 'b> $trait<&'a $type> for &'b $type {
+                type Ok = $type;
+                type Error = $err;
+
+                #[inline]
+                fn $trait_met(self, rhs: &'a $type) -> Result<Self::Ok, Self::Error> {
+                    $trait::$trait_met(*self, *rhs)
+                }
+            }
+        };
+
+        (for non-copyable $type:ty => $trait:ident, $trait_met: ident, $err:path) => {
+            impl<'a> $trait<&'a $type> for $type {
+                type Ok = $type;
+                type Error = $err;
+
+                #[inline]
+                fn $trait_met(self, rhs: &'a $type) -> Result<Self::Ok, Self::Error> {
+                    $trait::$trait_met(&self, rhs)
+                }
+            }
+
+            impl<'a> $trait<$type> for &'a $type {
+                type Ok = $type;
+                type Error = $err;
+
+                #[inline]
+                fn $trait_met(self, rhs: $type) -> Result<Self::Ok, Self::Error> {
+                    $trait::$trait_met(self, &rhs)
+                }
+            }
+
+            impl $trait for $type {
+                type Ok = $type;
+                type Error = $err;
+
+                #[inline]
+                fn $trait_met(self, rhs: $type) -> Result<Self::Ok, Self::Error> {
+                    $trait::$trait_met(&self, &rhs)
+                }
+            }
+        };
+    }
+
+    impl_fragile!(for non-fragile i32);
+    impl_fragile!(for non-fragile u32);
+    impl_fragile!(for non-fragile i64);
+    impl_fragile!(for non-fragile u64);
+    impl_fragile!(for non-fragile isize);
+    impl_fragile!(for non-fragile usize);
+    impl_fragile!(for non-fragile non-copyable BigInt);
+    impl_fragile!(for non-fragile non-copyable BigUint);
+
+    macro_rules! impl_scalar_fragile_mul {
+        (for non-fragile $type:ty) => {
+            impl FragileMul<usize> for $type {
+                type Ok = $type;
                 type Error = Infallible;
 
-                fn $tmet(self, other: $type) -> Result<Self::Output, Self::Error> {
-                    Ok(self.$pmet(other))
-                }
-            }
-        )*
-    };
-}
-
-macro_rules! blanket_impl_may_result {
-    ($($trait:ident, $met:ident,)*) => {
-        $(
-            impl<T, E> $trait<T> for Result<T, E>
-            where
-                T: $trait<Output = T, Error = E>
-            {
-                type Output = T;
-                type Error = E;
-
-                fn $met(self, other: T) -> Result<Self::Output, Self::Error> {
-                    match self {
-                        Ok(val) => val.$met(other),
-                        Err(e) => Err(e)
-                    }
+                fn fragile_mul(self, rhs: usize) -> Result<Self::Ok, Self::Error> {
+                    Ok(self * rhs as $type)
                 }
             }
 
-            impl<T, E> $trait<Result<T, E>> for T
-            where
-                T: $trait<Output = T, Error = E>
-            {
-                type Output = T;
-                type Error = E;
-
-                fn $met(self, other: Result<T, E>) -> Result<Self::Output, Self::Error> {
-                    match other {
-                        Ok(val) => self.$met(val),
-                        Err(e) => Err(e)
-                    }
-                }
-            }
-
-            impl<T, E> $trait for Result<T, E>
-            where
-                T: $trait<Output = T, Error = E>
-            {
-                type Output = T;
-                type Error = E;
-
-                fn $met(self, other: Result<T, E>) -> Result<Self::Output, Self::Error> {
-                    match (self, other) {
-                        (Ok(a), Ok(b)) => a.$met(b),
-                        (Err(e), _) | (_, Err(e)) => Err(e),
-                    }
-                }
-            }
-        )*
-    };
-}
-
-macro_rules! prim_impl_may_mul_usize_trait {
-    ($($type:ty,)*) => {
-        $(
-            impl MayMul<usize> for $type {
-                type Output = $type;
+            impl<'a> FragileMul<usize> for &'a $type {
+                type Ok = $type;
                 type Error = Infallible;
 
-                fn may_mul(self, other: usize) -> Result<Self::Output, Self::Error> {
-                    Ok(self * other as $type)
+                fn fragile_mul(self, rhs: usize) -> Result<Self::Ok, Self::Error> {
+                    FragileMul::fragile_mul(*self, rhs)
+                }
+            }
+        };
+
+        (for non-fragile non-copyable $type:ty) => {
+            impl<'a> FragileMul<usize> for &'a $type {
+                type Ok = $type;
+                type Error = Infallible;
+
+                fn fragile_mul(self, rhs: usize) -> Result<Self::Ok, Self::Error> {
+                    let rhs: $type = rhs.into();
+                    FragileMul::fragile_mul(self, &rhs)
                 }
             }
 
-        )*
-    };
-}
+            impl FragileMul<usize> for $type {
+                type Ok = $type;
+                type Error = Infallible;
 
-define_may_traits! {
-    MayAdd, may_add,
-    MaySub, may_sub,
-    MayMul, may_mul,
-    MayDiv, may_div,
-}
-
-blanket_impl_may_result! {
-    MayAdd, may_add,
-    MaySub, may_sub,
-    MayMul, may_mul,
-    MayDiv, may_div,
-}
-
-prim_impl_may_traits!(u8);
-prim_impl_may_traits!(i8);
-prim_impl_may_traits!(u16);
-prim_impl_may_traits!(i16);
-prim_impl_may_traits!(u32);
-prim_impl_may_traits!(i32);
-prim_impl_may_traits!(u64);
-prim_impl_may_traits!(i64);
-prim_impl_may_traits!(usize);
-prim_impl_may_traits!(isize);
-
-prim_impl_may_mul_usize_trait! {
-    i32,
-    u32,
-    isize,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::Infallible;
-    use anyhow::Error;
-
-    #[test]
-    fn add_on_result() -> Result<(), Error> {
-        let a: Result<_, Infallible> = Ok(3);
-        assert_eq!(8, a.may_add(5)?);
-        Ok(())
+                fn fragile_mul(self, rhs: usize) -> Result<Self::Ok, Self::Error> {
+                    FragileMul::fragile_mul(&self, rhs)
+                }
+            }
+        };
     }
 
-    #[test]
-    fn add_with_result() -> Result<(), Error> {
-        let a: Result<_, Infallible> = Ok(4);
-        assert_eq!(7, 3.may_add(a)?);
-        Ok(())
-    }
-
-    #[test]
-    fn add_both_result() -> Result<(), Error> {
-        let a: Result<_, Infallible> = Ok(3);
-        let b: Result<_, Infallible> = Ok(6);
-        assert_eq!(9, a.may_add(b)?);
-        Ok(())
-    }
-
-    #[test]
-    fn add_chained() -> Result<(), Error> {
-        let a = 3.may_add(4).may_add(5)?;
-        assert_eq!(12, a);
-        Ok(())
-    }
+    impl_scalar_fragile_mul!(for non-fragile i32);
+    impl_scalar_fragile_mul!(for non-fragile u32);
+    impl_scalar_fragile_mul!(for non-fragile i64);
+    impl_scalar_fragile_mul!(for non-fragile u64);
+    impl_scalar_fragile_mul!(for non-fragile isize);
+    impl_scalar_fragile_mul!(for non-fragile non-copyable BigInt);
+    impl_scalar_fragile_mul!(for non-fragile non-copyable BigUint);
 }
