@@ -7,6 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.38"
-num-traits = "0.2.14"
-thiserror = "1.0.23"
+anyhow = "1"
+num-bigint = "0.3"
+num-integer = "0.1"
+num-traits = "0.2"
+thiserror = "1"
+try-block = "0.1.0"
