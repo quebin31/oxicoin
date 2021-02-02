@@ -44,7 +44,7 @@ impl Error {
 
 impl From<Infallible> for Error {
     fn from(_: Infallible) -> Self {
-        unreachable!()
+        unreachable!("how do you dare?")
     }
 }
 
