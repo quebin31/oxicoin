@@ -1,20 +1,28 @@
-use num_traits::Pow;
+use num_bigint::{BigInt, BigUint, Sign, ToBigUint};
+use num_integer::Integer;
+use num_traits::{One, Pow, Zero};
 
-use crate::traits::{IsZero, MayAdd, MayDiv, MayMul, MaySub};
-use crate::utils::pow_mod;
-use crate::Error;
+use crate::traits::fragile::{FragileAdd, FragileDiv, FragileMul, FragileSub};
+use crate::traits::zero::IsZero;
+use crate::{forward_fragile_impl, Error};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldElement {
-    number: usize,
-    prime: usize,
+    prime: BigUint,
+    number: BigUint,
 }
 
 impl FieldElement {
     /// Build a new field element `number` on F_{prime}.
-    pub fn new(number: usize, prime: usize) -> Result<Self, Error> {
+    pub fn new<U>(number: U, prime: U) -> Result<Self, Error>
+    where
+        U: Into<BigUint>,
+    {
+        let number = number.into();
+        let prime = prime.into();
+
         if number >= prime {
-            Err(Error::InvalidFieldNumber(number, prime))
+            Err(Error::InvalidFieldNumber)
         } else {
             Ok(Self { number, prime })
         }
@@ -22,113 +30,159 @@ impl FieldElement {
 
     /// Get the _additive inverse_ of this element.
     #[inline]
-    pub fn add_inv(self) -> Self {
-        let number = self.prime - self.number;
-        Self { number, ..self }
+    pub fn add_inv(&self) -> Self {
+        let number = &self.prime - &self.number;
+
+        Self {
+            number,
+            prime: self.prime.clone(),
+        }
     }
 
     /// Get the _multiplicative inverse_ of this element.
     #[inline]
-    pub fn mul_inv(self) -> Self {
+    pub fn mul_inv(&self) -> Self {
         // Fermat's little theorem
-        self.pow(self.prime - 2)
+        self.pow(&self.prime - &2.to_biguint().unwrap())
     }
 }
 
 impl IsZero for FieldElement {
     fn is_zero(&self) -> bool {
-        self.number == 0
+        <BigUint as Zero>::is_zero(&self.number)
     }
 }
 
-impl Pow<usize> for FieldElement {
-    type Output = Self;
+impl<'a, E> Pow<E> for &'a FieldElement
+where
+    E: Into<BigInt>,
+{
+    type Output = FieldElement;
 
-    fn pow(self, exp: usize) -> Self::Output {
-        let number = pow_mod(self.number, exp, self.prime);
-        Self { number, ..self }
+    fn pow(self, exp: E) -> Self::Output {
+        let exp: BigInt = exp.into();
+        let exponent = match exp.to_biguint() {
+            Some(exp) => exp,
+            None => {
+                let prime = BigInt::from_biguint(Sign::Plus, &self.prime - BigUint::one());
+                exp.mod_floor(&prime).to_biguint().unwrap() // safe
+            }
+        };
+
+        let number = self.number.modpow(&exponent, &self.prime);
+
+        FieldElement {
+            number,
+            prime: self.prime.clone(),
+        }
     }
 }
 
-impl Pow<isize> for FieldElement {
-    type Output = Self;
+impl<E> Pow<E> for FieldElement
+where
+    E: Into<BigInt>,
+{
+    type Output = FieldElement;
 
-    fn pow(self, exp: isize) -> Self::Output {
-        // Rust's `%` operator is not the modulus operation.
-        let exp = exp.rem_euclid(self.prime as isize - 1);
-        self.pow(exp as usize)
+    fn pow(self, exp: E) -> Self::Output {
+        Pow::pow(&self, exp)
     }
 }
 
-impl MayAdd for FieldElement {
-    type Output = Self;
+impl<'a, 'b> FragileAdd<&'a FieldElement> for &'b FieldElement {
+    type Ok = FieldElement;
     type Error = Error;
 
     #[inline]
-    fn may_add(self, rhs: Self) -> Result<Self::Output, Self::Error> {
+    fn fragile_add(self, rhs: &'a FieldElement) -> Result<Self::Ok, Self::Error> {
         if self.prime != rhs.prime {
             Err(Error::InvalidFieldAddition)
         } else {
-            let number = (self.number + rhs.number) % self.prime;
-            Ok(Self { number, ..self })
+            let number = (&self.number + &rhs.number) % &self.prime;
+            let prime = self.prime.clone();
+
+            Ok(FieldElement { number, prime })
         }
     }
 }
 
-impl MaySub for FieldElement {
-    type Output = Self;
+impl<'a, 'b> FragileSub<&'a FieldElement> for &'b FieldElement {
+    type Ok = FieldElement;
     type Error = Error;
 
-    #[inline]
-    fn may_sub(self, rhs: Self) -> Result<Self::Output, Self::Error> {
+    fn fragile_sub(self, rhs: &'a FieldElement) -> Result<Self::Ok, Self::Error> {
         if self.prime != rhs.prime {
             Err(Error::InvalidFieldSubstraction)
         } else {
-            self.may_add(rhs.add_inv())
+            FragileAdd::fragile_add(self, &rhs.add_inv())
         }
     }
 }
 
-impl MayMul for FieldElement {
-    type Output = Self;
+impl<'a, 'b> FragileMul<&'a FieldElement> for &'b FieldElement {
+    type Ok = FieldElement;
     type Error = Error;
 
     #[inline]
-    fn may_mul(self, rhs: Self) -> Result<Self::Output, Self::Error> {
+    fn fragile_mul(self, rhs: &'a FieldElement) -> Result<Self::Ok, Self::Error> {
         if self.prime != rhs.prime {
             Err(Error::InvalidFieldMultiplication)
         } else {
             // quebin31: what happens if we overflow?
-            let number = (self.number * rhs.number) % self.prime;
-            Ok(Self { number, ..self })
+            let number = (&self.number * &rhs.number) % &self.prime;
+            let prime = self.prime.clone();
+
+            Ok(FieldElement { number, prime })
         }
     }
 }
 
-impl MayMul<usize> for FieldElement {
-    type Output = Self;
+impl<'a, U> FragileMul<U> for &'a FieldElement
+where
+    U: Into<BigUint>,
+{
+    type Ok = FieldElement;
     type Error = Error;
 
     #[inline]
-    fn may_mul(self, rhs: usize) -> Result<Self::Output, Self::Error> {
-        let this = Self::new(rhs, self.prime)?;
-        this.may_mul(self)
+    fn fragile_mul(self, rhs: U) -> Result<Self::Ok, Self::Error> {
+        let scale = rhs.into();
+        let scale = FieldElement::new(scale, self.prime.clone())?;
+        scale.fragile_mul(self)
     }
 }
 
-impl MayDiv for FieldElement {
-    type Output = Self;
+impl<U> FragileMul<U> for FieldElement
+where
+    U: Into<BigUint>,
+{
+    type Ok = Self;
     type Error = Error;
 
     #[inline]
-    fn may_div(self, rhs: Self) -> Result<Self::Output, Self::Error> {
+    fn fragile_mul(self, rhs: U) -> Result<Self::Ok, Self::Error> {
+        FragileMul::fragile_mul(&self, rhs)
+    }
+}
+
+impl<'a, 'b> FragileDiv<&'a FieldElement> for &'b FieldElement {
+    type Ok = FieldElement;
+    type Error = Error;
+
+    #[inline]
+    fn fragile_div(self, rhs: &'a FieldElement) -> Result<Self::Ok, Self::Error> {
         if self.prime != rhs.prime {
             Err(Error::InvalidFieldDivition)
         } else {
-            self.may_mul(rhs.mul_inv())
+            FragileMul::fragile_mul(self, &rhs.mul_inv())
         }
     }
 }
+
+forward_fragile_impl!(for non-copyable FieldElement => FragileAdd, fragile_add, Error);
+forward_fragile_impl!(for non-copyable FieldElement => FragileSub, fragile_sub, Error);
+forward_fragile_impl!(for non-copyable FieldElement => FragileMul, fragile_mul, Error);
+forward_fragile_impl!(for non-copyable FieldElement => FragileDiv, fragile_div, Error);
 
 #[cfg(test)]
 mod tests {
@@ -137,8 +191,8 @@ mod tests {
 
     #[test]
     fn equality() -> Result<()> {
-        let a = FieldElement::new(7, 13)?;
-        let b = FieldElement::new(6, 13)?;
+        let a = FieldElement::new(7usize, 13)?;
+        let b = FieldElement::new(6usize, 13)?;
 
         assert_ne!(a, b);
         Ok(())
@@ -146,31 +200,31 @@ mod tests {
 
     #[test]
     fn addition() -> Result<()> {
-        let a = FieldElement::new(6, 13)?;
-        let b = FieldElement::new(7, 13)?;
-        let c = a.may_add(b)?;
+        let a = FieldElement::new(6usize, 13)?;
+        let b = FieldElement::new(7usize, 13)?;
+        let c = a.fragile_add(b)?;
 
-        assert_eq!(c, FieldElement::new(0, 13)?);
+        assert_eq!(c, FieldElement::new(0usize, 13)?);
         Ok(())
     }
 
     #[test]
     fn substraction() -> Result<()> {
-        let a = FieldElement::new(9, 57)?;
-        let b = FieldElement::new(29, 57)?;
-        let c = a.may_sub(b)?;
+        let a = FieldElement::new(9usize, 57)?;
+        let b = FieldElement::new(29usize, 57)?;
+        let c = a.fragile_sub(b)?;
 
-        assert_eq!(c, FieldElement::new(37, 57)?);
+        assert_eq!(c, FieldElement::new(37usize, 57)?);
         Ok(())
     }
 
     #[test]
     fn multiplication() -> Result<()> {
-        let a = FieldElement::new(3, 13)?;
-        let b = FieldElement::new(12, 13)?;
-        let c = a.may_mul(b)?;
+        let a = FieldElement::new(3usize, 13)?;
+        let b = FieldElement::new(12usize, 13)?;
+        let c = a.fragile_mul(b)?;
 
-        assert_eq!(c, FieldElement::new(10, 13)?);
+        assert_eq!(c, FieldElement::new(10usize, 13)?);
         Ok(())
     }
 
@@ -178,22 +232,22 @@ mod tests {
     fn exponentiation() -> Result<()> {
         use num_traits::Pow;
 
-        let a = FieldElement::new(7, 13)?;
-        let b = a.pow(3usize);
-        let c = a.pow(-3isize);
+        let a = FieldElement::new(7usize, 13)?;
+        let b = (&a).pow(3usize);
+        let c = (&a).pow(-3isize);
 
-        assert_eq!(b, FieldElement::new(5, 13)?);
-        assert_eq!(c, FieldElement::new(8, 13)?);
+        assert_eq!(b, FieldElement::new(5usize, 13)?);
+        assert_eq!(c, FieldElement::new(8usize, 13)?);
         Ok(())
     }
 
     #[test]
     fn divition() -> Result<()> {
-        let a = FieldElement::new(2, 19)?;
-        let b = FieldElement::new(7, 19)?;
-        let c = a.may_div(b)?;
+        let a = FieldElement::new(2usize, 19)?;
+        let b = FieldElement::new(7usize, 19)?;
+        let c = a.fragile_div(b)?;
 
-        assert_eq!(c, FieldElement::new(3, 19)?);
+        assert_eq!(c, FieldElement::new(3usize, 19)?);
         Ok(())
     }
 }
