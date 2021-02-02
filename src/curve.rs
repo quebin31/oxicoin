@@ -1,8 +1,9 @@
-use std::error::Error as StdError;
+use num_bigint::BigUint;
+use num_traits::{One, Pow};
+use try_block::try_block;
 
-use num_traits::Pow;
-
-use crate::traits::{IsZero, MayAdd, MayDiv, MayMul, MaySub};
+use crate::traits::fragile::{FragileAdd, FragileDiv, FragileMul, FragileSub};
+use crate::traits::zero::IsZero;
 use crate::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,13 +17,26 @@ impl<T> EllipticCurve<T> {
         Self { a, b }
     }
 
-    pub fn contains<E>(&self, x: T, y: T) -> Result<bool, E>
+    pub fn contains<'a, E>(&'a self, x: &'a T, y: &'a T) -> Result<bool, Error>
     where
-        T: Copy + Eq,
-        T: Pow<usize, Output = T>,
-        T: MayMul<Output = T, Error = E> + MayAdd<Output = T, Error = E>,
+        E: Into<Error>,
+        T: FragileAdd<T, Ok = T, Error = E> + Eq,
+        T: FragileAdd<&'a T, Ok = T, Error = E>,
+        T: FragileMul<&'a T, Ok = T, Error = E>,
+        &'a T: Pow<usize, Output = T>,
+        &'a T: FragileMul<Ok = T, Error = E>,
     {
-        Ok(y.pow(2) == x.pow(3).may_add(self.a.may_mul(x)?).may_add(self.b)?)
+        let contained: Result<_, E> = try_block! {
+            let lhs = y.pow(2);
+            let rhs = x
+                .pow(3)
+                .fragile_add((&self.a).fragile_mul(x)?)?
+                .fragile_add(&self.b)?;
+
+            Ok(lhs == rhs)
+        };
+
+        contained.map_err(Into::into)
     }
 }
 
@@ -35,12 +49,14 @@ pub enum Point<T> {
 impl<T> Point<T> {
     pub fn new<E>(x: T, y: T, curve: EllipticCurve<T>) -> Result<Self, Error>
     where
-        E: StdError + Send + Sync + 'static,
-        T: Copy + Eq,
-        T: Pow<usize, Output = T>,
-        T: MayMul<Output = T, Error = E> + MayAdd<Output = T, Error = E>,
+        E: Into<Error>,
+        T: FragileAdd<Ok = T, Error = E> + Eq,
+        for<'a> T: FragileAdd<&'a T, Ok = T, Error = E>,
+        for<'a> T: FragileMul<&'a T, Ok = T, Error = E>,
+        for<'a> &'a T: Pow<usize, Output = T>,
+        for<'a> &'a T: FragileMul<Ok = T, Error = E>,
     {
-        if curve.contains(x, y).map_err(Error::from_err)? {
+        if curve.contains(&x, &y)? {
             Ok(Self::Normal(x, y, curve))
         } else {
             Err(Error::PointNotInTheCurve)
@@ -87,99 +103,106 @@ impl<T> Point<T> {
     }
 }
 
-impl<T, E> MayAdd for Point<T>
+impl<'a, 'b, T, E> FragileAdd<&'a Point<T>> for &'b Point<T>
 where
-    E: StdError + Send + Sync + 'static,
-    T: Copy + Eq,
-    T: IsZero,
-    T: Pow<usize, Output = T>,
-    T: MayAdd<Output = T, Error = E> + MaySub<Output = T, Error = E>,
-    T: MayMul<Output = T, Error = E> + MayDiv<Output = T, Error = E>,
-    T: MayMul<usize, Output = T, Error = E>, // scalar mul
+    E: Into<Error>,
+    T: IsZero + Eq + Clone,
+    T: FragileAdd<Ok = T, Error = E>,
+    T: FragileSub<Ok = T, Error = E>,
+    T: FragileDiv<Ok = T, Error = E>,
+    T: FragileMul<Ok = T, Error = E>,
+    T: FragileMul<usize, Ok = T, Error = E>,
+    for<'c> T: FragileAdd<&'c T, Ok = T, Error = E>,
+    for<'c> T: FragileSub<&'c T, Ok = T, Error = E>,
+    for<'c> &'c T: Pow<usize, Output = T>,
+    for<'c> &'c T: FragileSub<&'c T, Ok = T, Error = E>,
+    for<'c> &'c T: FragileMul<usize, Ok = T, Error = E>,
 {
-    type Output = Self;
+    type Ok = Point<T>;
     type Error = Error;
 
-    fn may_add(self, other: Self) -> Result<Self::Output, Self::Error> {
-        if !self.same_curve(&other) {
+    fn fragile_add(self, rhs: &'a Point<T>) -> Result<Self::Ok, Self::Error> {
+        if !self.same_curve(rhs) {
             return Err(Error::PointsNotInTheSameCurve);
         }
 
-        match (self, other) {
-            // Additive identity
-            (Self::AtInfinity, _) => Ok(other),
-            (_, Self::AtInfinity) => Ok(self),
+        let point: Result<_, E> = try_block! {
+            match (self, rhs) {
+                // Additive identity
+                (Point::AtInfinity, r) => Ok(r.to_owned()),
+                (l, Point::AtInfinity) => Ok(l.to_owned()),
 
-            // Normal addition between points
-            (Self::Normal(x1, y1, curve), Self::Normal(x2, y2, _)) => match (x1 == x2, y1 == y2) {
-                // Same x axis, rhs is additive inverse of self and viceversa
-                (true, false) => Ok(Self::at_infinity()),
+                // Normal addition between points
+                (Point::Normal(x1, y1, curve), Point::Normal(x2, y2, _)) => {
+                    match (x1 == x2, y1 == y2) {
+                        // Same x axis, rhs is additive inverse of self and viceversa
+                        (true, false) => Ok(Point::at_infinity()),
 
-                // Same x and y axis, self is equal to rhs
-                (true, true) => {
-                    if y1.is_zero() {
-                        return Ok(Self::at_infinity());
+                        // Same x and y axis, self is equal to rhs
+                        (true, true) => {
+                            if y1.is_zero() {
+                                return Ok(Point::at_infinity());
+                            }
+
+                            let slope = x1
+                                .pow(2usize)
+                                .fragile_mul(3)?
+                                .fragile_add(&curve.a)?
+                                .fragile_div(y1.fragile_mul(2)?)?;
+
+                            let x3 = slope.pow(2usize).fragile_sub(x1.fragile_mul(2)?)?;
+                            let y3 = slope.fragile_mul(x1.fragile_sub(&x3)?)?.fragile_sub(y1)?;
+
+                            Ok(Point::Normal(x3, y3, curve.to_owned()))
+                        }
+
+                        // Different x axis, y axis doesn't matter in this case
+                        _ => {
+                            let slope = y2.fragile_sub(&y1)?.fragile_div(x2.fragile_sub(&x1)?)?;
+                            let x3 = slope.pow(2usize).fragile_sub(x1)?.fragile_sub(x2)?;
+                            let y3 = slope.fragile_mul(x1.fragile_sub(&x3)?)?.fragile_sub(y1)?;
+
+                            Ok(Point::Normal(x3, y3, curve.to_owned()))
+                        }
                     }
-
-                    let slope = (x1.pow(2usize).may_mul(3).may_add(curve.a))
-                        .may_div(y1.may_mul(2))
-                        .map_err(Error::from_err)?;
-
-                    let x3 = Ok(slope.pow(2usize))
-                        .may_sub(x1.may_mul(2))
-                        .map_err(Error::from_err)?;
-
-                    let y3 = slope
-                        .may_mul(x1.may_sub(x3))
-                        .may_sub(y1)
-                        .map_err(Error::from_err)?;
-
-                    Self::new(x3, y3, curve)
                 }
+            }
+        };
 
-                // Different x axis, y axis doesn't matter in this case
-                _ => {
-                    let slope = y2
-                        .may_sub(y1)
-                        .may_div(x2.may_sub(x1))
-                        .map_err(Error::from_err)?;
-
-                    let x3 = slope
-                        .may_mul(slope)
-                        .may_sub(x1)
-                        .may_sub(x2)
-                        .map_err(Error::from_err)?;
-
-                    let y3 = slope
-                        .may_mul(x1.may_sub(x3))
-                        .may_sub(y1)
-                        .map_err(Error::from_err)?;
-
-                    Self::new(x3, y3, curve)
-                }
-            },
-        }
+        point.map_err(Into::into)
     }
 }
 
-impl<T, E> MayMul<usize> for Point<T>
+impl<'a, T> FragileMul<BigUint> for &'a Point<T>
 where
-    E: StdError + Send + Sync + 'static,
-    T: Copy + Eq,
-    T: IsZero,
-    T: Pow<usize, Output = T>,
-    T: MayAdd<Output = T, Error = E> + MaySub<Output = T, Error = E>,
-    T: MayMul<Output = T, Error = E> + MayDiv<Output = T, Error = E>,
-    T: MayMul<usize, Output = T, Error = E>, // scalar mul
+    T: IsZero + Clone + Eq,
+    T: FragileAdd<Ok = T, Error = Error>,
+    T: FragileSub<Ok = T, Error = Error>,
+    T: FragileMul<Ok = T, Error = Error>,
+    T: FragileDiv<Ok = T, Error = Error>,
+    T: FragileMul<usize, Ok = T, Error = Error>,
+    for<'b> T: FragileAdd<&'b T, Ok = T, Error = Error>,
+    for<'b> T: FragileSub<&'b T, Ok = T, Error = Error>,
+    for<'b> &'b T: Pow<usize, Output = T>,
+    for<'b> &'b T: FragileSub<Ok = T, Error = Error>,
+    for<'b> &'b T: FragileMul<usize, Ok = T, Error = Error>,
 {
-    type Output = Self;
+    type Ok = Point<T>;
     type Error = Error;
 
-    fn may_mul(self, other: usize) -> Result<Self::Output, Self::Error> {
-        let mut result = Point::at_infinity();
+    fn fragile_mul(self, mut coef: BigUint) -> Result<Self::Ok, Self::Error> {
+        let one = BigUint::one();
 
-        for _ in 0..other {
-            result = result.may_add(self)?;
+        let mut result = Point::at_infinity();
+        let mut current = self.clone();
+
+        while !coef.is_zero() {
+            if &coef & &one == one {
+                result = (&result).fragile_add(&current)?;
+            }
+
+            coef >>= 1;
+            current = current.fragile_add(&current)?;
         }
 
         Ok(result)
@@ -209,48 +232,49 @@ mod tests {
 
     #[test]
     fn addition_with_inf() -> Result<()> {
-        let curve = EllipticCurve::new(5, 7);
+        let curve = EllipticCurve::new(5i32, 7);
+
         let a = Point::new(-1, -1, curve)?;
         let inf = Point::at_infinity();
 
-        assert_eq!(a.may_add(inf)?, a);
-        assert_eq!(inf.may_add(a)?, a);
+        assert_eq!(a.fragile_add(&inf)?, a);
+        assert_eq!(inf.fragile_add(&a)?, a);
 
         Ok(())
     }
 
     #[test]
     fn addition_with_inverse() -> Result<()> {
-        let curve = EllipticCurve::new(5, 7);
+        let curve = EllipticCurve::new(5i32, 7);
         let a = Point::new(-1, -1, curve)?;
         let b = Point::new(-1, 1, curve)?;
 
-        assert_eq!(a.may_add(b)?, Point::at_infinity());
-        assert_eq!(b.may_add(a)?, Point::at_infinity());
+        assert_eq!(a.fragile_add(&b)?, Point::at_infinity());
+        assert_eq!(b.fragile_add(&a)?, Point::at_infinity());
 
         Ok(())
     }
 
     #[test]
     fn addition_diff_points() -> Result<()> {
-        let curve = EllipticCurve::new(5, 7);
+        let curve = EllipticCurve::new(5i32, 7);
         let a = Point::new(-1, -1, curve)?;
         let b = Point::new(2, 5, curve)?;
         let c = Point::new(3, -7, curve)?;
 
-        assert_eq!(a.may_add(b)?, c);
-        assert_eq!(b.may_add(a)?, c);
+        assert_eq!(a.fragile_add(&b)?, c);
+        assert_eq!(b.fragile_add(&a)?, c);
 
         Ok(())
     }
 
     #[test]
     fn addition_equal_points() -> Result<()> {
-        let curve = EllipticCurve::new(5, 7);
+        let curve = EllipticCurve::new(5i32, 7);
         let a = Point::new(-1, -1, curve)?;
         let b = Point::new(18, 77, curve)?;
 
-        assert_eq!(a.may_add(a)?, b);
+        assert_eq!(a.fragile_add(&a)?, b);
 
         Ok(())
     }
@@ -259,19 +283,19 @@ mod tests {
     fn addition_with_field_element() -> Result<()> {
         use crate::field::FieldElement;
 
-        let prime = 223;
+        let prime = 223usize;
         let curve = EllipticCurve::new(FieldElement::new(0, prime)?, FieldElement::new(7, prime)?);
 
         let a = Point::new(
             FieldElement::new(192, prime)?,
             FieldElement::new(105, prime)?,
-            curve,
+            curve.clone(),
         )?;
 
         let b = Point::new(
             FieldElement::new(17, prime)?,
             FieldElement::new(56, prime)?,
-            curve,
+            curve.clone(),
         )?;
 
         let c = Point::new(
@@ -280,7 +304,7 @@ mod tests {
             curve,
         )?;
 
-        assert_eq!(c, a.may_add(b)?);
+        assert_eq!(c, a.fragile_add(&b)?);
         Ok(())
     }
 
@@ -288,13 +312,13 @@ mod tests {
     fn scalar_multiplication_with_field_element() -> Result<()> {
         use crate::field::FieldElement;
 
-        let prime = 223;
+        let prime = 223usize;
         let curve = EllipticCurve::new(FieldElement::new(0, prime)?, FieldElement::new(7, prime)?);
 
         let a = Point::new(
             FieldElement::new(47, prime)?,
             FieldElement::new(71, prime)?,
-            curve,
+            curve.clone(),
         )?;
 
         let b = Point::new(
@@ -303,8 +327,8 @@ mod tests {
             curve,
         )?;
 
-        assert_eq!(b, a.may_mul(20)?);
-        assert_eq!(Point::at_infinity(), b.may_add(a)?);
+        assert_eq!(b, a.fragile_mul(BigUint::from(20usize))?);
+        assert_eq!(Point::at_infinity(), b.fragile_add(&a)?);
         Ok(())
     }
 }
