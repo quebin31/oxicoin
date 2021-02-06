@@ -7,9 +7,10 @@ use num_traits::{One, Pow, Zero};
 use crate::{forward_binop_impl, Error};
 
 use super::field::FieldElement;
+use super::field::PRIME;
 
 lazy_static! {
-    static ref ECURVE: EllipticCurve =
+    pub(crate) static ref ECURVE: EllipticCurve =
         EllipticCurve::new(FieldElement::new(0usize), FieldElement::new(7usize));
 }
 
@@ -119,7 +120,7 @@ where
     type Output = Point;
 
     fn mul(self, coef: U) -> Self::Output {
-        let mut coef = coef.into();
+        let mut coef = coef.into() % &*PRIME;
 
         let one = BigUint::one();
         let mut result = Point::zero();
