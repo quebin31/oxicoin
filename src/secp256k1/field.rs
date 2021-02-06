@@ -11,11 +11,11 @@ use crate::forward_binop_impl;
 const PRIME_IN_HEX: &[u8; 64] = b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
 
 lazy_static! {
-    static ref PRIME: BigUint = BigUint::parse_bytes(PRIME_IN_HEX, 16).unwrap();
+    pub(crate) static ref PRIME: BigUint = BigUint::parse_bytes(PRIME_IN_HEX, 16).unwrap();
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FieldElement(BigUint);
+pub struct FieldElement(pub(crate) BigUint);
 
 impl FieldElement {
     /// Build a new element in the S256 field
@@ -23,22 +23,20 @@ impl FieldElement {
     where
         U: Into<BigUint>,
     {
-        let number = number.into() % &*PRIME;
-        Self(number)
+        Self(number.into() % &*PRIME)
     }
 
     /// Get the _additive inverse_ of this element.
     #[inline]
     pub fn add_inv(&self) -> Self {
-        let number = &*PRIME - &self.0;
-        Self(number)
+        Self(&*PRIME - &self.0)
     }
 
     /// Get the _multiplicative inverse_ of this element.
     #[inline]
     pub fn mul_inv(&self) -> Self {
         // Fermat's little theorem
-        self.pow(&*PRIME - &BigUint::from(2usize))
+        self.pow(&*PRIME - 2usize)
     }
 }
 
@@ -83,8 +81,8 @@ impl<'a, 'b> Add<&'a FieldElement> for &'b FieldElement {
     type Output = FieldElement;
 
     fn add(self, rhs: &'a FieldElement) -> Self::Output {
-        let number = &self.0 + &rhs.0 % &*PRIME;
-        FieldElement(number)
+        let number = (&self.0 + &rhs.0) % &*PRIME;
+        FieldElement::new(number)
     }
 }
 
@@ -101,7 +99,7 @@ impl<'a, 'b> Mul<&'a FieldElement> for &'b FieldElement {
 
     fn mul(self, rhs: &'a FieldElement) -> Self::Output {
         let number = (&self.0 * &rhs.0) % &*PRIME;
-        FieldElement(number)
+        FieldElement::new(number)
     }
 }
 
