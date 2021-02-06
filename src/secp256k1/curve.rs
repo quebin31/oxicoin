@@ -36,7 +36,7 @@ pub enum Point {
 }
 
 impl Point {
-    pub fn new<E>(x: FieldElement, y: FieldElement) -> Result<Self, Error> {
+    pub fn new(x: FieldElement, y: FieldElement) -> Result<Self, Error> {
         if ECURVE.contains(&x, &y) {
             Ok(Self::Normal(x, y))
         } else {
