@@ -1,12 +1,12 @@
 use num_bigint::BigUint;
 
-use super::curve::Point;
-use super::{GENERATOR, ORDER};
+use super::crypto::PublicKey;
+use super::{G, N};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Signature {
-    r: BigUint,
-    s: BigUint,
+    pub(crate) r: BigUint,
+    pub(crate) s: BigUint,
 }
 
 impl Signature {
@@ -19,58 +19,37 @@ impl Signature {
         Self { r, s }
     }
 
-    pub fn is_valid(&self, digest: &[u8; 32], pub_key: &Point) -> bool {
+    pub fn is_valid(&self, digest: &[u8; 32], pub_key: &PublicKey) -> bool {
         let z = BigUint::from_bytes_be(digest);
-        let s_inv = self.s.modpow(&(&*ORDER - 2usize), &*ORDER);
+        let s_inv = self.s.modpow(&(&*N - 2usize), &*N);
 
-        let u = (&z * &s_inv) % &*ORDER;
-        let v = (&self.r * &s_inv) % &*ORDER;
+        let u = (&z * &s_inv) % &*N;
+        let v = (&self.r * &s_inv) % &*N;
 
-        let total = &*GENERATOR * u + pub_key * v;
+        let total = &*G * u + &pub_key.ec_point * v;
         total.x().unwrap().0 == self.r
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::secp256k1::curve::Point;
-    use crate::secp256k1::field::FieldElement;
+    use crate::secp256k1::crypto::PublicKey;
 
     use super::Signature;
 
-    use num_bigint::BigUint;
+    use hex_literal::hex;
 
     #[test]
-    fn valid_signature() {
-        let digest = [
-            0xBC, 0x62, 0xD4, 0xB8, 0x0D, 0x9E, 0x36, 0xDA, 0x29, 0xC1, 0x6C, 0x5D, 0x4D, 0x9F,
-            0x11, 0x73, 0x1F, 0x36, 0x05, 0x2C, 0x72, 0x40, 0x1A, 0x76, 0xC2, 0x3C, 0x0F, 0xB5,
-            0xA9, 0xB7, 0x44, 0x23,
-        ];
+    fn must_be_valid() {
+        let digest = hex!("bc62d4b80d9e36da29c16c5d4d9f11731f36052c72401a76c23c0fb5a9b74423");
 
-        let r = BigUint::parse_bytes(
-            b"37206a0610995c58074999cb9767b87af4c4978db68c06e8e6e81d282047a7c6",
-            16,
-        )
-        .unwrap();
-        let s = BigUint::parse_bytes(
-            b"8ca63759c1157ebeaec0d03cecca119fc9a75bf8e6d0fa65c841c8e2738cdaec",
-            16,
-        )
-        .unwrap();
+        let r = biguint!("37206a0610995c58074999cb9767b87af4c4978db68c06e8e6e81d282047a7c6");
+        let s = biguint!("8ca63759c1157ebeaec0d03cecca119fc9a75bf8e6d0fa65c841c8e2738cdaec");
         let signature = Signature::new(r, s);
 
-        let x = BigUint::parse_bytes(
-            b"04519fac3d910ca7e7138f7013706f619fa8f033e6ec6e09370ea38cee6a7574",
-            16,
-        )
-        .unwrap();
-        let y = BigUint::parse_bytes(
-            b"82b51eab8c27c66e26c858a079bcdf4f1ada34cec420cafc7eac1a42216fb6c4",
-            16,
-        )
-        .unwrap();
-        let pub_key = Point::new(FieldElement::new(x), FieldElement::new(y)).unwrap();
+        let x = biguint!("04519fac3d910ca7e7138f7013706f619fa8f033e6ec6e09370ea38cee6a7574");
+        let y = biguint!("82b51eab8c27c66e26c858a079bcdf4f1ada34cec420cafc7eac1a42216fb6c4");
+        let pub_key = PublicKey::new(x, y).unwrap();
 
         assert!(signature.is_valid(&digest, &pub_key))
     }
