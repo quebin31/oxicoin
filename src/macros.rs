@@ -1,4 +1,3 @@
-#[macro_export]
 macro_rules! forward_binop_impl {
     (for non-copyable $type:ty where $binop:ident does $met:ident) => {
         impl<'a> $binop<&'a $type> for $type {
