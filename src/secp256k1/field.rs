@@ -5,13 +5,10 @@ use num_bigint::{BigInt, BigUint, Sign};
 use num_integer::Integer;
 use num_traits::{One, Pow, Zero};
 
-use crate::forward_binop_impl;
-
-/// `secp256k1` prime = 2^256 - 2^32 - 977
-const PRIME_IN_HEX: &[u8; 64] = b"fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
-
 lazy_static! {
-    pub(crate) static ref PRIME: BigUint = BigUint::parse_bytes(PRIME_IN_HEX, 16).unwrap();
+    /// `secp256k1` prime = 2^256 - 2^32 - 977
+    pub(crate) static ref PRIME: BigUint =
+        biguint!("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
