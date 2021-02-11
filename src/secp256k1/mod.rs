@@ -1,11 +1,11 @@
 use lazy_static::lazy_static;
 
+pub mod crypto;
 pub mod curve;
 pub mod field;
 pub mod signature;
 
 use curve::Point;
-use field::FieldElement;
 use num_bigint::BigUint;
 
 lazy_static! {
