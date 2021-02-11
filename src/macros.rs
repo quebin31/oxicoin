@@ -25,3 +25,23 @@ macro_rules! forward_binop_impl {
         }
     };
 }
+
+macro_rules! biguint {
+    ($hex:tt) => {
+        num_bigint::BigUint::from_bytes_be(&hex_literal::hex!($hex))
+    };
+}
+
+macro_rules! field_elem {
+    ($hex:tt) => {{
+        use $crate::secp256k1::field::FieldElement;
+        FieldElement::new(biguint!($hex))
+    }};
+}
+
+macro_rules! ec_point {
+    ($hex_x:tt, $hex_y:tt,) => {{
+        use $crate::secp256k1::curve::Point;
+        Point::new(field_elem!($hex_x), field_elem!($hex_y)).unwrap()
+    }};
+}
