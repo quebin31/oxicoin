@@ -10,6 +10,9 @@ pub enum Error {
 
     #[error("point is not on the curve")]
     PointNotInTheCurve,
+
+    #[error("overflow error while padding")]
+    OverflowPadding,
 }
 
 impl Error {
