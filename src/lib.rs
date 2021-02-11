@@ -11,7 +11,7 @@ pub enum Error {
     Custom(String),
 
     #[error("point is not on the curve")]
-    PointNotInTheCurve,
+    PointNotOnTheCurve,
 
     #[error("overflow error while padding")]
     OverflowPadding,

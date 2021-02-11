@@ -41,7 +41,7 @@ impl Point {
         if ECURVE.contains(&x, &y) {
             Ok(Self::Normal(x, y))
         } else {
-            Err(Error::PointNotInTheCurve)
+            Err(Error::PointNotOnTheCurve)
         }
     }
 
