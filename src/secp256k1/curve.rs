@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use num_traits::{One, Pow, Zero};
 
-use crate::{forward_binop_impl, Error};
+use crate::Error;
 
 use super::field::FieldElement;
 use super::field::PRIME;
@@ -61,6 +61,10 @@ impl Point {
             Point::AtInfinity { .. } => None,
             Point::Normal(_, y) => Some(y),
         }
+    }
+
+    pub fn is_point_at_inf(&self) -> bool {
+        matches!(self, Self::AtInfinity)
     }
 }
 
