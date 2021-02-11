@@ -8,9 +8,15 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1"
+hex-literal = "0.3"
+hmac = "0.10"
 lazy_static = "1"
 num-bigint = { version = "0.3", features = ["rand"] }
 num-integer = "0.1"
 num-traits = "0.2"
 rand = "0.7"
+sha2 = "0.9"
 thiserror = "1"
+
+[dev-dependencies]
+insta = "1"
