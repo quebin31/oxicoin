@@ -26,6 +26,7 @@ macro_rules! forward_binop_impl {
     };
 }
 
+#[macro_export]
 macro_rules! biguint {
     ($hex:tt) => {
         num_bigint::BigUint::from_bytes_be(&hex_literal::hex!($hex))
