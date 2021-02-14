@@ -5,6 +5,7 @@ use num_bigint::BigUint;
 use num_integer::Integer;
 use num_traits::{One, Pow, Zero};
 
+use crate::utils::prepend_padding;
 use crate::Error;
 
 use super::field::FieldElement;
@@ -70,30 +71,30 @@ impl Point {
     }
 
     /// Serialize the given point with the SEC format
-    pub fn serialize(&self, compressed: bool) -> Option<Vec<u8>> {
-        match (self.x(), self.y()) {
-            (Some(x), Some(y)) => {
+    pub fn serialize(&self, compressed: bool) -> Result<Vec<u8>, Error> {
+        match self {
+            Self::Normal(x, y) => {
                 if compressed {
-                    let x_bigendian = x.0.to_bytes_be();
+                    let x_bigendian = prepend_padding(x.0.to_bytes_be(), 32, 0u8)?;
                     let y_evenness = if y.0.is_even() { 0x02 } else { 0x03 };
 
                     let serialized: Vec<_> =
                         std::iter::once(y_evenness).chain(x_bigendian).collect();
 
-                    Some(serialized)
+                    Ok(serialized)
                 } else {
-                    let x_bigendian = x.0.to_bytes_be();
-                    let y_bigendian = y.0.to_bytes_be();
+                    let x_bigendian = prepend_padding(x.0.to_bytes_be(), 32, 0u8)?;
+                    let y_bigendian = prepend_padding(y.0.to_bytes_be(), 32, 0u8)?;
                     let serialized: Vec<_> = std::iter::once(0x04u8)
                         .chain(x_bigendian)
                         .chain(y_bigendian)
                         .collect();
 
-                    Some(serialized)
+                    Ok(serialized)
                 }
             }
 
-            _ => None,
+            _ => Err(Error::SerializePointAtInfinity),
         }
     }
 

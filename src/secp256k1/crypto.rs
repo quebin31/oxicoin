@@ -60,7 +60,7 @@ impl PublicKey {
     }
 
     /// Serialize this public key using the SEC format
-    pub fn serialize(&self, compressed: bool) -> Option<Vec<u8>> {
+    pub fn serialize(&self, compressed: bool) -> Result<Vec<u8>, Error> {
         self.ec_point.serialize(compressed)
     }
 }
@@ -142,8 +142,7 @@ impl PrivateKey {
             z -= &*N;
         }
 
-        let secret_bytes = self.secret.to_bytes_be();
-        let secret_bytes = prepend_padding(secret_bytes, 32, 0)?;
+        let secret_bytes = prepend_padding(self.secret.to_bytes_be(), 32, 0)?;
 
         let hmac = HmacSha256::new_varkey(&k).unwrap();
         let k = hmac

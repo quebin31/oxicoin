@@ -16,6 +16,9 @@ pub enum Error {
     #[error("overflow error while padding")]
     OverflowPadding,
 
+    #[error("cannot serialize point at infinity")]
+    SerializePointAtInfinity,
+
     #[error("invalid digest, expecting 32 bytes, got {0}")]
     InvalidDigestLength(usize),
 
