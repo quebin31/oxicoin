@@ -52,8 +52,16 @@ impl PublicKey {
         Self::new(x, y)
     }
 
-    pub fn valid_signature(&self, digest: &[u8; 32], signature: &Signature) -> bool {
+    pub fn valid_signature<B>(&self, digest: B, signature: &Signature) -> Result<bool, Error>
+    where
+        B: AsRef<[u8]>,
+    {
         signature.is_valid(digest, &self)
+    }
+
+    /// Serialize this public key using the SEC format
+    pub fn serialize(&self, compressed: bool) -> Option<Vec<u8>> {
+        self.ec_point.serialize(compressed)
     }
 }
 
@@ -95,7 +103,15 @@ impl PrivateKey {
         &self.pub_key
     }
 
-    pub fn create_signature(&self, digest: &[u8; 32]) -> Result<Signature, Error> {
+    pub fn create_signature<B>(&self, digest: B) -> Result<Signature, Error>
+    where
+        B: AsRef<[u8]>,
+    {
+        let digest = digest.as_ref();
+        if digest.len() != 32 {
+            return Err(Error::InvalidDigestLength(digest.len()));
+        }
+
         let k = self.deterministic_k(digest)?;
         let r = (&*G * k.clone()).x().unwrap().0.clone();
 
@@ -109,8 +125,14 @@ impl PrivateKey {
         Ok(Signature::new(r, s))
     }
 
-    fn deterministic_k(&self, digest: &[u8; 32]) -> Result<BigUint, Error> {
+    fn deterministic_k<B>(&self, digest: B) -> Result<BigUint, Error>
+    where
+        B: AsRef<[u8]>,
+    {
         type HmacSha256 = Hmac<Sha256>;
+
+        let digest = digest.as_ref();
+        debug_assert!(digest.len() == 32);
 
         let mut z = BigUint::from_bytes_be(digest);
         let k = [0x00u8; 32];
@@ -162,26 +184,5 @@ impl PrivateKey {
             let hmac = HmacSha256::new_varkey(&k).unwrap();
             v = hmac.chain(&v).finalize().into_bytes();
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use anyhow::Result;
-    use hex_literal::hex;
-
-    use super::*;
-
-    #[test]
-    fn create_and_validate_signature() -> Result<()> {
-        let priv_key = PrivateKey::new(BigUint::from(12345usize));
-        let digest = hex!("bc62d4b80d9e36da29c16c5d4d9f11731f36052c72401a76c23c0fb5a9b74423");
-
-        let signature = priv_key.create_signature(&digest)?;
-
-        insta::assert_debug_snapshot!(signature); // signature shouldn't change
-        assert!(priv_key.public_key().valid_signature(&digest, &signature));
-
-        Ok(())
     }
 }
