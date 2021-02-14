@@ -11,7 +11,7 @@ use super::field::FieldElement;
 use super::signature::Signature;
 use super::{G, N};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublicKey {
     pub(crate) ec_point: Point,
 }
@@ -57,7 +57,7 @@ impl PublicKey {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrivateKey {
     pub(crate) secret: BigUint,
     pub(crate) pub_key: PublicKey,
