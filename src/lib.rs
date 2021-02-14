@@ -1,5 +1,6 @@
 #[macro_use]
 mod macros;
+pub mod base58;
 pub mod secp256k1;
 mod utils;
 
