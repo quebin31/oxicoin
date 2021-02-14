@@ -35,6 +35,12 @@ impl FieldElement {
         // Fermat's little theorem
         self.pow(&*PRIME - 2usize)
     }
+
+    /// Get the square root of this element
+    #[inline]
+    pub fn sqrt(&self) -> Self {
+        self.pow((&*PRIME + 1usize) / 4usize)
+    }
 }
 
 impl Zero for FieldElement {
