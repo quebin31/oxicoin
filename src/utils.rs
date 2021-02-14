@@ -23,6 +23,23 @@ where
     }
 }
 
+pub(crate) fn strip_start<T>(arr: &[T], elem: T) -> &[T]
+where
+    T: Eq,
+{
+    let mut new_start = 0;
+
+    while arr[new_start] == elem {
+        new_start += 1;
+
+        if new_start == arr.len() {
+            break;
+        }
+    }
+
+    &arr[new_start..]
+}
+
 pub(crate) trait ChainedMac {
     fn chain(self, data: &[u8]) -> Self;
 }
