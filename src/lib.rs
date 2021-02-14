@@ -15,6 +15,12 @@ pub enum Error {
 
     #[error("overflow error while padding")]
     OverflowPadding,
+
+    #[error("invalid digest, expecting 32 bytes, got {0}")]
+    InvalidDigestLength(usize),
+
+    #[error("invalid sec bytes, expecting either 33 or 65 bytes, got {0} ")]
+    InvalidSecBytesLength(usize),
 }
 
 impl Error {

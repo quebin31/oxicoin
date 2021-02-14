@@ -2,6 +2,7 @@ use std::ops::{Add, Mul};
 
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
+use num_integer::Integer;
 use num_traits::{One, Pow, Zero};
 
 use crate::Error;
@@ -10,6 +11,7 @@ use super::field::FieldElement;
 use super::field::PRIME;
 
 lazy_static! {
+    pub(crate) static ref B: FieldElement = FieldElement::new(7usize);
     pub(crate) static ref ECURVE: EllipticCurve =
         EllipticCurve::new(FieldElement::new(0usize), FieldElement::new(7usize));
 }
@@ -65,6 +67,72 @@ impl Point {
 
     pub fn is_point_at_inf(&self) -> bool {
         matches!(self, Self::AtInfinity)
+    }
+
+    /// Serialize the given point with the SEC format
+    pub fn serialize(&self, compressed: bool) -> Option<Vec<u8>> {
+        match (self.x(), self.y()) {
+            (Some(x), Some(y)) => {
+                if compressed {
+                    let x_bigendian = x.0.to_bytes_be();
+                    let y_evenness = if y.0.is_even() { 0x02 } else { 0x03 };
+
+                    let serialized: Vec<_> =
+                        std::iter::once(y_evenness).chain(x_bigendian).collect();
+
+                    Some(serialized)
+                } else {
+                    let x_bigendian = x.0.to_bytes_be();
+                    let y_bigendian = y.0.to_bytes_be();
+                    let serialized: Vec<_> = std::iter::once(0x04u8)
+                        .chain(x_bigendian)
+                        .chain(y_bigendian)
+                        .collect();
+
+                    Some(serialized)
+                }
+            }
+
+            _ => None,
+        }
+    }
+
+    /// Deserialize the given bytes with the SEC format
+    pub fn deserialize<B>(bytes: B) -> Result<Self, Error>
+    where
+        B: AsRef<[u8]>,
+    {
+        let bytes = bytes.as_ref();
+
+        let length = bytes.len();
+        if length != 33 && length != 65 {
+            return Err(Error::InvalidSecBytesLength(length));
+        }
+
+        // uncompressed sec format
+        if bytes[0] == 0x04 {
+            let x = FieldElement::new(BigUint::from_bytes_be(&bytes[1..33]));
+            let y = FieldElement::new(BigUint::from_bytes_be(&bytes[33..65]));
+            return Self::new(x, y);
+        }
+
+        // compressed sec format
+        let y_is_even = bytes[0] == 0x02;
+        let x = FieldElement::new(BigUint::from_bytes_be(&bytes[1..]));
+
+        // elliptic curve equation: y^2 = x^3 + x*a + b
+        // rhs of the elliptic curve equation (note a = 0)
+        let alpha = x.pow(3u8) + &*B;
+
+        // solve lhs
+        let beta = alpha.sqrt();
+
+        let y = match (beta.0.is_even(), y_is_even) {
+            (true, true) | (false, false) => beta,
+            (true, false) | (false, true) => FieldElement::new(&*PRIME - beta.0),
+        };
+
+        Ok(Self::Normal(x, y)) // no need to check
     }
 }
 
