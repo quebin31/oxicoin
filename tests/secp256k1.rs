@@ -102,3 +102,28 @@ fn compressed_sec_serialization() {
         &hex!("0296be5b1292f6c856b3c5654e886fc13511462059089cdf9c479623bfcbe77690"),
     );
 }
+
+#[test]
+fn address_creation() {
+    fn test_case(secret: usize, compressed: bool, testnet: bool, expected: &str) {
+        let private_key = PrivateKey::new(secret);
+        let public_key = private_key.public_key();
+        let address = public_key.create_address(compressed, testnet).unwrap();
+
+        assert_eq!(expected, address);
+    }
+
+    test_case(5002, false, true, "mmTPbXQFxboEtNRkwfh6K51jvdtHLxGeMA");
+    test_case(
+        33632321603200000,
+        true,
+        true,
+        "mopVkxp8UhXqRYbCYJsbeE1h1fiF64jcoH",
+    );
+    test_case(
+        320257972354799,
+        true,
+        false,
+        "1F1Pn2y6pDb68E5nYJJeba4TLg2U7B6KF1",
+    );
+}
