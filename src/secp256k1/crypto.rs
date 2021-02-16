@@ -193,4 +193,15 @@ impl PrivateKey {
             v = hmac.chain(&v).finalize().into_bytes();
         }
     }
+
+    pub fn create_wif(&self, compressed: bool, testnet: bool) -> Result<String, Error> {
+        let secret_bytes = prepend_padding(self.secret.to_bytes_be(), 32, 0)?;
+        let prefix = if testnet { 0xef } else { 0x80 };
+        let mut data: Vec<_> = std::iter::once(prefix).chain(secret_bytes).collect();
+        if compressed {
+            data.push(0x01)
+        }
+
+        Ok(base58::encode_checksum(data))
+    }
 }

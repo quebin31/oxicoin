@@ -127,3 +127,32 @@ fn address_creation() {
         "1F1Pn2y6pDb68E5nYJJeba4TLg2U7B6KF1",
     );
 }
+
+#[test]
+fn create_wif() {
+    fn test_case(secret: usize, compressed: bool, testnet: bool, expected: &str) {
+        let private_key = PrivateKey::new(secret);
+        let wif = private_key.create_wif(compressed, testnet).unwrap();
+
+        assert_eq!(expected, wif);
+    }
+
+    test_case(
+        5003,
+        true,
+        true,
+        "cMahea7zqjxrtgAbB7LSGbcQUr1uX1ojuat9jZodMN8rFTv2sfUK",
+    );
+    test_case(
+        33715652388894101,
+        false,
+        true,
+        "91avARGdfge8E4tZfYLoxeJ5sGBdNJQH4kvjpWAxgzczjbCwxic",
+    );
+    test_case(
+        1481187632463599,
+        true,
+        false,
+        "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgiuQJv1h8Ytr2S53a",
+    );
+}
