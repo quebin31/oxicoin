@@ -15,6 +15,7 @@ num-bigint = { version = "0.3", features = ["rand"] }
 num-integer = "0.1"
 num-traits = "0.2"
 rand = "0.7"
+ripemd160 = "0.9"
 sha2 = "0.9"
 thiserror = "1"
 

@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
 
 use hmac::{Hmac, Mac};
-use sha2::Sha256;
+use ripemd160::Ripemd160;
+use sha2::{Digest, Sha256};
 
 use crate::Error;
 
@@ -40,11 +41,39 @@ where
     &arr[new_start..]
 }
 
-pub(crate) trait ChainedMac {
+pub(crate) fn hash160<B>(data: B) -> Vec<u8>
+where
+    B: AsRef<[u8]>,
+{
+    let hasher = Sha256::new();
+    let digest = hasher.chain(data.as_ref()).finalize();
+
+    let hasher = Ripemd160::new();
+    let digest = hasher.chain(digest).finalize();
+
+    digest.as_slice().to_vec()
+}
+
+pub(crate) fn hash256<B>(data: B) -> Vec<u8>
+where
+    B: AsRef<[u8]>,
+{
+    let mut hasher = Sha256::new();
+
+    hasher.update(data.as_ref());
+    let digest = hasher.finalize_reset();
+
+    hasher.update(digest);
+    let digest = hasher.finalize();
+
+    digest.as_slice().to_vec()
+}
+
+pub(crate) trait Chain {
     fn chain(self, data: &[u8]) -> Self;
 }
 
-impl ChainedMac for Hmac<Sha256> {
+impl Chain for Hmac<Sha256> {
     fn chain(mut self, data: &[u8]) -> Self {
         self.update(data);
         self
