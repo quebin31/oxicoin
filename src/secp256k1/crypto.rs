@@ -3,8 +3,8 @@ use num_bigint::BigUint;
 use num_traits::One;
 use sha2::Sha256;
 
-use crate::utils::{prepend_padding, ChainedMac};
-use crate::Error;
+use crate::utils::{hash160, prepend_padding, Chain};
+use crate::{base58, Error};
 
 use super::curve::Point;
 use super::field::FieldElement;
@@ -62,6 +62,15 @@ impl PublicKey {
     /// Serialize this public key using the SEC format
     pub fn serialize(&self, compressed: bool) -> Result<Vec<u8>, Error> {
         self.ec_point.serialize(compressed)
+    }
+
+    /// Create the address
+    pub fn create_address(&self, compressed: bool, testnet: bool) -> Result<String, Error> {
+        let serialized = self.serialize(compressed)?;
+        let digest = hash160(serialized);
+        let prefix = if testnet { 0x6f } else { 0x00 };
+        let data: Vec<_> = std::iter::once(prefix).chain(digest).collect();
+        Ok(base58::encode_checksum(data))
     }
 }
 
