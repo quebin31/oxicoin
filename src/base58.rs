@@ -3,6 +3,8 @@ use num_bigint::BigUint;
 use num_integer::Integer;
 use num_traits::{ToPrimitive, Zero};
 
+use crate::utils::hash256;
+
 const BASE58_ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 pub fn encode<B>(bytes: B) -> String
@@ -27,6 +29,20 @@ where
 
     result.push_str(&prefix);
     result.chars().rev().collect()
+}
+
+pub fn encode_checksum<B>(bytes: B) -> String
+where
+    B: AsRef<[u8]>,
+{
+    let checksum = hash256(bytes.as_ref());
+    let data: Vec<_> = bytes
+        .as_ref()
+        .iter()
+        .chain(&checksum[..4])
+        .copied()
+        .collect();
+    encode(&data)
 }
 
 #[cfg(test)]
