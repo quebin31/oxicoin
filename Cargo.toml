@@ -19,6 +19,8 @@ rand = "0.7"
 ripemd160 = "0.9"
 sha2 = "0.9"
 thiserror = "1"
+tokio-stream = "0.1"
+tokio-util = { version = "0.6", features = ["io"] }
 
 [dev-dependencies]
 insta = "1"
