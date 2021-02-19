@@ -41,7 +41,7 @@ where
     &arr[new_start..]
 }
 
-pub(crate) fn hash160<B>(data: B) -> Vec<u8>
+pub fn hash160<B>(data: B) -> Vec<u8>
 where
     B: AsRef<[u8]>,
 {
@@ -54,7 +54,7 @@ where
     digest.as_slice().to_vec()
 }
 
-pub(crate) fn hash256<B>(data: B) -> Vec<u8>
+pub fn hash256<B>(data: B) -> Vec<u8>
 where
     B: AsRef<[u8]>,
 {
