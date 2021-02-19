@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1"
+bytes = "1"
 hex-literal = "0.3"
 hmac = "0.10"
 lazy_static = "1"
