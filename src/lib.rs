@@ -4,12 +4,20 @@ pub mod base58;
 pub mod secp256k1;
 pub mod utils;
 
+use std::io;
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("custom error: {0}")]
     Custom(String),
+
+    #[error("io error: {source}")]
+    IoError {
+        #[from]
+        source: io::Error,
+    },
 
     #[error("point is not on the curve")]
     PointNotOnTheCurve,
@@ -25,6 +33,9 @@ pub enum Error {
 
     #[error("invalid sec bytes, expecting either 33 or 65 bytes, got {0} ")]
     InvalidSecBytesLength(usize),
+
+    #[error("invalid signature ({0})")]
+    InvalidSignature(&'static str),
 }
 
 impl Error {
