@@ -115,7 +115,7 @@ impl Signature {
             return Err(Error::InvalidSignature("bad marker"));
         }
 
-        let s_size = buf[0] as usize;
+        let s_size = buf[1] as usize;
         let mut s_bytes = vec![0u8; s_size];
         reader.read_exact(&mut s_bytes)?;
         let s = BigUint::from_bytes_be(&s_bytes);
@@ -147,5 +147,8 @@ mod tests {
         );
 
         assert_eq!(serialized, expected);
+
+        let deserialized = Signature::deserialize(serialized.as_slice()).unwrap();
+        assert_eq!(deserialized, signature);
     }
 }
