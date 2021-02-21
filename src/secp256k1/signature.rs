@@ -1,3 +1,6 @@
+use std::io::Read;
+
+use bytes::Buf;
 use num_bigint::BigUint;
 
 use crate::utils::strip_start;
@@ -78,6 +81,50 @@ impl Signature {
             .collect();
 
         Ok(serialized)
+    }
+
+    pub fn deserialize<B: Buf>(bytes: B) -> Result<Self, Error> {
+        let size = bytes.remaining();
+        let mut reader = bytes.reader();
+
+        let mut buf = [0u8; 4];
+        reader.read_exact(&mut buf)?;
+
+        if buf[0] != 0x30 {
+            return Err(Error::InvalidSignature("bad compound"));
+        }
+
+        let claimed_size = (buf[1] + 2) as usize;
+        if claimed_size != size {
+            return Err(Error::InvalidSignature("bad signature size"));
+        }
+
+        if buf[2] != 0x02 {
+            return Err(Error::InvalidSignature("bad marker"));
+        }
+
+        let r_size = buf[3] as usize;
+        let mut r_bytes = vec![0u8; r_size];
+        reader.read_exact(&mut r_bytes)?;
+        let r = BigUint::from_bytes_be(&r_bytes);
+
+        let mut buf = [0u8; 2];
+        reader.read_exact(&mut buf)?;
+
+        if buf[0] != 0x02 {
+            return Err(Error::InvalidSignature("bad marker"));
+        }
+
+        let s_size = buf[0] as usize;
+        let mut s_bytes = vec![0u8; s_size];
+        reader.read_exact(&mut s_bytes)?;
+        let s = BigUint::from_bytes_be(&s_bytes);
+
+        if size != 6 + r_size + s_size {
+            return Err(Error::InvalidSignature("signature too long"));
+        }
+
+        Ok(Self { r, s })
     }
 }
 
