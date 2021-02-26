@@ -4,7 +4,7 @@ use num_traits::One;
 use sha2::Sha256;
 
 use crate::utils::{hash160, prepend_padding, Chain};
-use crate::{base58, Error};
+use crate::{base58, Error, Result};
 
 use super::curve::Point;
 use super::field::FieldElement;
@@ -23,7 +23,7 @@ impl From<Point> for PublicKey {
 }
 
 impl PublicKey {
-    pub fn new<U>(x: U, y: U) -> Result<Self, Error>
+    pub fn new<U>(x: U, y: U) -> Result<Self>
     where
         U: Into<BigUint>,
     {
@@ -34,7 +34,7 @@ impl PublicKey {
         Ok(Self { ec_point })
     }
 
-    pub fn from_bytes_be<B>(x: B, y: B) -> Result<Self, Error>
+    pub fn from_bytes_be<B>(x: B, y: B) -> Result<Self>
     where
         B: AsRef<[u8]>,
     {
@@ -43,7 +43,7 @@ impl PublicKey {
         Self::new(x, y)
     }
 
-    pub fn from_bytes_le<B>(x: B, y: B) -> Result<Self, Error>
+    pub fn from_bytes_le<B>(x: B, y: B) -> Result<Self>
     where
         B: AsRef<[u8]>,
     {
@@ -52,7 +52,7 @@ impl PublicKey {
         Self::new(x, y)
     }
 
-    pub fn valid_signature<B>(&self, digest: B, signature: &Signature) -> Result<bool, Error>
+    pub fn valid_signature<B>(&self, digest: B, signature: &Signature) -> Result<bool>
     where
         B: AsRef<[u8]>,
     {
@@ -60,12 +60,21 @@ impl PublicKey {
     }
 
     /// Serialize this public key using the SEC format
-    pub fn serialize(&self, compressed: bool) -> Result<Vec<u8>, Error> {
+    pub fn serialize(&self, compressed: bool) -> Result<Vec<u8>> {
         self.ec_point.serialize(compressed)
     }
 
+    /// Deserialize the given bytes using the SEC format
+    pub fn deserialize<B>(bytes: B) -> Result<Self>
+    where
+        B: AsRef<[u8]>,
+    {
+        let ec_point = Point::deserialize(bytes)?;
+        Ok(Self { ec_point })
+    }
+
     /// Create the address
-    pub fn create_address(&self, compressed: bool, testnet: bool) -> Result<String, Error> {
+    pub fn create_address(&self, compressed: bool, testnet: bool) -> Result<String> {
         let serialized = self.serialize(compressed)?;
         let digest = hash160(serialized);
         let prefix = if testnet { 0x6f } else { 0x00 };
@@ -112,7 +121,7 @@ impl PrivateKey {
         &self.pub_key
     }
 
-    pub fn create_signature<B>(&self, digest: B) -> Result<Signature, Error>
+    pub fn create_signature<B>(&self, digest: B) -> Result<Signature>
     where
         B: AsRef<[u8]>,
     {
@@ -134,7 +143,7 @@ impl PrivateKey {
         Ok(Signature::new(r, s))
     }
 
-    fn deterministic_k<B>(&self, digest: B) -> Result<BigUint, Error>
+    fn deterministic_k<B>(&self, digest: B) -> Result<BigUint>
     where
         B: AsRef<[u8]>,
     {
@@ -194,7 +203,7 @@ impl PrivateKey {
         }
     }
 
-    pub fn create_wif(&self, compressed: bool, testnet: bool) -> Result<String, Error> {
+    pub fn create_wif(&self, compressed: bool, testnet: bool) -> Result<String> {
         let secret_bytes = prepend_padding(self.secret.to_bytes_be(), 32, 0)?;
         let prefix = if testnet { 0xef } else { 0x80 };
         let mut data: Vec<_> = std::iter::once(prefix).chain(secret_bytes).collect();
