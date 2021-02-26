@@ -9,7 +9,10 @@ edition = "2018"
 [dependencies]
 anyhow = "1"
 boolinator = "2"
+byteorder = "1"
 bytes = "1"
+derivative = "2"
+hex = "0.4"
 hex-literal = "0.3"
 hmac = "0.10"
 lazy_static = "1"
@@ -20,9 +23,6 @@ rand = "0.7"
 ripemd160 = "0.9"
 sha2 = "0.9"
 thiserror = "1"
-tokio = { version = "1", features = ["io-util"] }
-tokio-stream = "0.1"
-tokio-util = { version = "0.6", features = ["io"] }
 
 [dev-dependencies]
 insta = "1"
