@@ -1,8 +1,11 @@
 #[macro_use]
 mod macros;
 pub mod base58;
+pub mod core;
+mod format;
 pub mod secp256k1;
 pub mod utils;
+pub mod varint;
 
 use std::io;
 
@@ -18,6 +21,12 @@ pub enum Error {
         #[from]
         source: io::Error,
     },
+
+    #[error("int to big for varint")]
+    IntToBigForVarInt,
+
+    #[error("invalid bytes for varint")]
+    InvalidBytesForVarInt,
 
     #[error("point is not on the curve")]
     PointNotOnTheCurve,
@@ -44,4 +53,4 @@ impl Error {
     }
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;

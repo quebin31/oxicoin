@@ -6,7 +6,7 @@ use num_integer::Integer;
 use num_traits::{One, Pow, Zero};
 
 use crate::utils::prepend_padding;
-use crate::Error;
+use crate::{Error, Result};
 
 use super::field::FieldElement;
 use super::field::PRIME;
@@ -40,7 +40,7 @@ pub enum Point {
 }
 
 impl Point {
-    pub fn new(x: FieldElement, y: FieldElement) -> Result<Self, Error> {
+    pub fn new(x: FieldElement, y: FieldElement) -> Result<Self> {
         if ECURVE.contains(&x, &y) {
             Ok(Self::Normal(x, y))
         } else {
@@ -71,7 +71,7 @@ impl Point {
     }
 
     /// Serialize the given point with the SEC format
-    pub fn serialize(&self, compressed: bool) -> Result<Vec<u8>, Error> {
+    pub fn serialize(&self, compressed: bool) -> Result<Vec<u8>> {
         match self {
             Self::Normal(x, y) => {
                 if compressed {
@@ -99,7 +99,7 @@ impl Point {
     }
 
     /// Deserialize the given bytes with the SEC format
-    pub fn deserialize<B>(bytes: B) -> Result<Self, Error>
+    pub fn deserialize<B>(bytes: B) -> Result<Self>
     where
         B: AsRef<[u8]>,
     {

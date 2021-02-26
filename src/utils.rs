@@ -4,9 +4,9 @@ use hmac::{Hmac, Mac};
 use ripemd160::Ripemd160;
 use sha2::{Digest, Sha256};
 
-use crate::Error;
+use crate::{Error, Result};
 
-pub(crate) fn prepend_padding<A, T>(vec: A, size: usize, with: T) -> Result<Vec<T>, Error>
+pub(crate) fn prepend_padding<A, T>(vec: A, size: usize, with: T) -> Result<Vec<T>>
 where
     T: Clone,
     A: Into<Vec<T>>,

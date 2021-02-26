@@ -4,7 +4,7 @@ use bytes::Buf;
 use num_bigint::BigUint;
 
 use crate::utils::strip_start;
-use crate::Error;
+use crate::{Error, Result};
 
 use super::crypto::PublicKey;
 use super::{G, N};
@@ -25,7 +25,7 @@ impl Signature {
         Self { r, s }
     }
 
-    pub fn is_valid<B>(&self, digest: B, pub_key: &PublicKey) -> Result<bool, Error>
+    pub fn is_valid<B>(&self, digest: B, pub_key: &PublicKey) -> Result<bool>
     where
         B: AsRef<[u8]>,
     {
@@ -45,7 +45,7 @@ impl Signature {
     }
 
     /// Serialize signature with DER format
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+    pub fn serialize(&self) -> Result<Vec<u8>> {
         let r_bigendian = self.r.to_bytes_be();
         let r_bigendian = strip_start(&r_bigendian, 0x00);
         let r_bigendian = if r_bigendian[0] & 0x80 == 0x80 {
@@ -83,7 +83,7 @@ impl Signature {
         Ok(serialized)
     }
 
-    pub fn deserialize<B: Buf>(bytes: B) -> Result<Self, Error> {
+    pub fn deserialize(bytes: impl Buf) -> Result<Self> {
         let size = bytes.remaining();
         let mut reader = bytes.reader();
 
