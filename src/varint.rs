@@ -87,7 +87,7 @@ impl TryFrom<usize> for VarInt {
 }
 
 impl VarInt {
-    pub fn encode(self) -> Vec<u8> {
+    pub fn serialize(self) -> Vec<u8> {
         match self {
             VarInt::U8(val) => vec![val],
             VarInt::U16(val) => std::iter::once(0xfdu8)
@@ -104,7 +104,7 @@ impl VarInt {
         }
     }
 
-    pub fn decode(bytes: impl Buf) -> Result<Self> {
+    pub fn deserialize(bytes: impl Buf) -> Result<Self> {
         let mut reader = bytes.reader();
 
         match reader.read_u8()? {
@@ -148,10 +148,10 @@ mod tests {
         let varint = VarInt::from(234u8);
         assert_eq!(varint, VarInt::U8(234));
 
-        let encoded = varint.encode();
+        let encoded = varint.serialize();
         assert_eq!(encoded, vec![234]);
 
-        let decoded = VarInt::decode(encoded.as_slice())?;
+        let decoded = VarInt::deserialize(encoded.as_slice())?;
         assert_eq!(decoded, varint);
 
         Ok(())
@@ -162,19 +162,19 @@ mod tests {
         let varint = VarInt::from(U8_LIMIT + 2);
         assert_eq!(varint, VarInt::U16(255));
 
-        let encoded = varint.encode();
+        let encoded = varint.serialize();
         assert_eq!(encoded, vec![0xfd, 0xff, 0x00]);
 
-        let decoded = VarInt::decode(encoded.as_slice())?;
+        let decoded = VarInt::deserialize(encoded.as_slice())?;
         assert_eq!(decoded, varint);
 
         let varint = VarInt::from(0x8549u16);
         assert_eq!(varint, VarInt::U16(0x8549));
 
-        let encoded = varint.encode();
+        let encoded = varint.serialize();
         assert_eq!(encoded, vec![0xfd, 0x49, 0x85]);
 
-        let decoded = VarInt::decode(encoded.as_slice())?;
+        let decoded = VarInt::deserialize(encoded.as_slice())?;
         assert_eq!(decoded, varint);
 
         Ok(())
@@ -185,19 +185,19 @@ mod tests {
         let varint = VarInt::from(U16_LIMIT);
         assert_eq!(varint, VarInt::U32(U16_LIMIT as u32));
 
-        let encoded = varint.encode();
+        let encoded = varint.serialize();
         assert_eq!(encoded, vec![0xfe, 0xff, 0xff, 0x00, 0x00]);
 
-        let decoded = VarInt::decode(encoded.as_slice())?;
+        let decoded = VarInt::deserialize(encoded.as_slice())?;
         assert_eq!(decoded, varint);
 
         let varint = VarInt::from(0xffffd805u32);
         assert_eq!(varint, VarInt::U32(0xffffd805u32));
 
-        let encoded = varint.encode();
+        let encoded = varint.serialize();
         assert_eq!(encoded, vec![0xfe, 0x05, 0xd8, 0xff, 0xff]);
 
-        let decoded = VarInt::decode(encoded.as_slice())?;
+        let decoded = VarInt::deserialize(encoded.as_slice())?;
         assert_eq!(decoded, varint);
 
         Ok(())
@@ -208,25 +208,25 @@ mod tests {
         let varint = VarInt::from(U32_LIMIT);
         assert_eq!(varint, VarInt::U64(U32_LIMIT as u64));
 
-        let encoded = varint.encode();
+        let encoded = varint.serialize();
         assert_eq!(
             encoded,
             vec![0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00]
         );
 
-        let decoded = VarInt::decode(encoded.as_slice())?;
+        let decoded = VarInt::deserialize(encoded.as_slice())?;
         assert_eq!(decoded, varint);
 
         let varint = VarInt::try_from(0xffffffffffdc468du64)?;
         assert_eq!(varint, VarInt::U64(0xffffffffffdc468d));
 
-        let encoded = varint.encode();
+        let encoded = varint.serialize();
         assert_eq!(
             encoded,
             vec![0xff, 0x8d, 0x46, 0xdc, 0xff, 0xff, 0xff, 0xff, 0xff]
         );
 
-        let decoded = VarInt::decode(encoded.as_slice())?;
+        let decoded = VarInt::deserialize(encoded.as_slice())?;
         assert_eq!(decoded, varint);
 
         assert!(VarInt::try_from(U64_LIMIT).is_err());
