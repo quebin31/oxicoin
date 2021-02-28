@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use byteorder::{LittleEndian, ReadBytesExt};
 use bytes::Buf;
 
@@ -18,7 +20,43 @@ pub struct Tx {
 
 impl Tx {
     pub fn serialize(&self) -> Result<Vec<u8>> {
-        todo!()
+        let version_bytes = self.version.to_le_bytes();
+
+        let no_inputs = VarInt::try_from(self.inputs.len())?;
+        let no_inputs_bytes = no_inputs.serialize().into_iter();
+
+        let no_outputs = VarInt::try_from(self.outputs.len())?;
+        let no_outputs_bytes = no_outputs.serialize().into_iter();
+
+        let inputs_bytes = self
+            .inputs
+            .iter()
+            .map(|input| input.serialize())
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten();
+
+        let outputs_bytes = self
+            .outputs
+            .iter()
+            .map(|output| output.serialize())
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten();
+
+        let locktime_bytes = self.locktime.to_le_bytes();
+
+        let result = version_bytes
+            .iter()
+            .copied()
+            .chain(no_inputs_bytes)
+            .chain(inputs_bytes)
+            .chain(no_outputs_bytes)
+            .chain(outputs_bytes)
+            .chain(locktime_bytes.iter().copied())
+            .collect();
+
+        Ok(result)
     }
 
     pub fn deserialize(buf: impl Buf, testnet: bool) -> Result<Self> {
@@ -26,12 +64,12 @@ impl Tx {
 
         let version = reader.read_u32::<LittleEndian>()?;
 
-        let no_inputs = VarInt::decode(reader.get_mut())?;
+        let no_inputs = VarInt::deserialize(reader.get_mut())?;
         let inputs: Vec<_> = (0..no_inputs.as_u64())
             .map(|_| Input::deserialize(reader.get_mut()))
             .collect::<Result<_, _>>()?;
 
-        let no_outputs = VarInt::decode(reader.get_mut())?;
+        let no_outputs = VarInt::deserialize(reader.get_mut())?;
         let outputs: Vec<_> = (0..no_outputs.as_u64())
             .map(|_| Output::deserialize(reader.get_mut()))
             .collect::<Result<_, _>>()?;
