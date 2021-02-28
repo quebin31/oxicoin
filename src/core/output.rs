@@ -12,6 +12,18 @@ pub struct Output {
 }
 
 impl Output {
+    pub fn serialize(&self) -> Result<Vec<u8>> {
+        let result = self
+            .amount
+            .to_le_bytes()
+            .iter()
+            .copied()
+            .chain(self.script_pubkey.serialize()?)
+            .collect();
+
+        Ok(result)
+    }
+
     pub fn deserialize(buf: impl Buf) -> Result<Self> {
         let mut reader = buf.reader();
 
