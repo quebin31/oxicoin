@@ -39,6 +39,21 @@ impl Input {
         })
     }
 
+    pub fn serialize(&self) -> Result<Vec<u8>> {
+        let prev_tx_bytes = self.prev_tx.iter().copied().rev();
+        let prev_idx_bytes = self.prev_idx.to_le_bytes();
+        let script_sig_bytes = self.script_sig.serialize()?.into_iter();
+        let sequence_bytes = self.sequence.to_le_bytes();
+
+        let result = prev_tx_bytes
+            .chain(prev_idx_bytes.iter().copied())
+            .chain(script_sig_bytes)
+            .chain(sequence_bytes.iter().copied())
+            .collect();
+
+        Ok(result)
+    }
+
     pub fn deserialize(buf: impl Buf) -> Result<Self> {
         let mut reader = buf.reader();
 
