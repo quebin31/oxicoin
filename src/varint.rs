@@ -126,6 +126,15 @@ impl VarInt {
             value => Ok(Self::U8(value)),
         }
     }
+
+    pub fn as_u64(self) -> u64 {
+        match self {
+            VarInt::U8(val) => val as u64,
+            VarInt::U16(val) => val as u64,
+            VarInt::U32(val) => val as u64,
+            VarInt::U64(val) => val,
+        }
+    }
 }
 
 #[cfg(test)]
