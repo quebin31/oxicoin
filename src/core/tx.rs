@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use byteorder::{LittleEndian, ReadBytesExt};
 use bytes::Buf;
 
+use crate::utils::hash256;
 use crate::varint::VarInt;
 use crate::Result;
 
@@ -19,6 +20,17 @@ pub struct Tx {
 }
 
 impl Tx {
+    pub fn id(&self) -> Result<String> {
+        Ok(hex::encode(self.hash()?))
+    }
+
+    pub fn hash(&self) -> Result<Vec<u8>> {
+        let serialized = self.serialize()?;
+        let mut digest = hash256(&serialized);
+        digest.reverse();
+        Ok(digest)
+    }
+
     pub fn serialize(&self) -> Result<Vec<u8>> {
         let version_bytes = self.version.to_le_bytes();
 
