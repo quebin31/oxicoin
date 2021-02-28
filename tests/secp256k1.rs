@@ -1,10 +1,10 @@
 use anyhow::Result;
 use hex_literal::hex;
-use iotacoin::biguint;
-use iotacoin::secp256k1::crypto::{PrivateKey, PublicKey};
-use iotacoin::secp256k1::curve::Point;
-use iotacoin::secp256k1::signature::Signature;
 use num_bigint::BigUint;
+use oxicoin::biguint;
+use oxicoin::secp256k1::crypto::{PrivateKey, PublicKey};
+use oxicoin::secp256k1::curve::Point;
+use oxicoin::secp256k1::signature::Signature;
 
 #[test]
 fn signature_must_be_valid() -> Result<()> {
@@ -16,9 +16,9 @@ fn signature_must_be_valid() -> Result<()> {
 
     let x = biguint!("04519fac3d910ca7e7138f7013706f619fa8f033e6ec6e09370ea38cee6a7574");
     let y = biguint!("82b51eab8c27c66e26c858a079bcdf4f1ada34cec420cafc7eac1a42216fb6c4");
-    let pub_key = PublicKey::new(x, y).unwrap();
+    let pub_key = PublicKey::new(x, y)?;
 
-    assert!(signature.is_valid(&digest, &pub_key).unwrap());
+    assert!(signature.is_valid(&digest, &pub_key)?);
     Ok(())
 }
 

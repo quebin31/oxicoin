@@ -1,8 +1,8 @@
 use std::env;
 
 use anyhow::{anyhow, Result};
-use iotacoin::secp256k1::crypto::PrivateKey;
-use iotacoin::utils::hash256;
+use oxicoin::secp256k1::crypto::PrivateKey;
+use oxicoin::utils::hash256;
 
 fn main() -> Result<()> {
     let args: Vec<_> = env::args().collect();
