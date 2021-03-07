@@ -79,3 +79,7 @@ impl Chain for Hmac<Sha256> {
         self
     }
 }
+
+pub(crate) fn default<T: Default>() -> T {
+    Default::default()
+}
