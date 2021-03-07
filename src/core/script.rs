@@ -27,7 +27,7 @@ impl ScriptCommand {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Script {
     cmds: Vec<ScriptCommand>,
 }
