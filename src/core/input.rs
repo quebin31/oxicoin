@@ -4,20 +4,22 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use bytes::{Buf, Bytes};
 use derivative::Derivative;
 
+use crate::core::tx::Tx;
 use crate::Result;
 
+use super::fetcher::TX_FETCHER;
 use super::script::Script;
 
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct Input {
     #[derivative(Debug(format_with = "crate::format::bytes::fmt"))]
-    prev_tx: Bytes, // size: 32 bytes
-    prev_idx: u32,
+    pub(crate) prev_tx: Bytes, // size: 32 bytes
+    pub(crate) prev_idx: u32,
     #[derivative(Debug = "ignore")]
-    script_sig: Script, // size: variable
+    pub(crate) script_sig: Script, // size: variable
     #[derivative(Debug = "ignore")]
-    sequence: u32,
+    pub(crate) sequence: u32,
 }
 
 impl Input {
@@ -37,6 +39,19 @@ impl Input {
             script_sig,
             sequence,
         })
+    }
+
+    pub async fn fetch_tx(&self, testnet: bool) -> Result<Tx> {
+        let tx_id = hex::encode(&self.prev_tx);
+        TX_FETCHER.fetch(&tx_id, testnet, false).await
+    }
+
+    pub fn value(&self, tx: &Tx) -> u64 {
+        tx.outputs[self.prev_idx as usize].amount
+    }
+
+    pub fn script_pubkey<'a>(&self, tx: &'a Tx) -> &'a Script {
+        &tx.outputs[self.prev_idx as usize].script_pubkey
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>> {
