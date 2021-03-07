@@ -22,6 +22,12 @@ pub enum Error {
         source: io::Error,
     },
 
+    #[error("hyper error: {source}")]
+    HyperError {
+        #[from]
+        source: hyper::Error,
+    },
+
     #[error("int to big for varint")]
     IntToBigForVarInt,
 
@@ -45,6 +51,9 @@ pub enum Error {
 
     #[error("invalid signature ({0})")]
     InvalidSignature(&'static str),
+
+    #[error("fetched invalid transaction")]
+    FetchedInvalidTransaction,
 }
 
 impl Error {
