@@ -12,11 +12,11 @@ use super::output::Output;
 
 #[derive(Debug, Clone)]
 pub struct Tx {
-    version: u32,
-    inputs: Vec<Input>,
-    outputs: Vec<Output>,
-    locktime: u64,
-    testnet: bool,
+    pub(crate) version: u32,
+    pub(crate) inputs: Vec<Input>,
+    pub(crate) outputs: Vec<Output>,
+    pub(crate) locktime: u64,
+    pub(crate) testnet: bool,
 }
 
 impl Tx {
@@ -29,6 +29,17 @@ impl Tx {
         let mut digest = hash256(&serialized);
         digest.reverse();
         Ok(digest)
+    }
+
+    pub async fn fee(&self, testnet: bool) -> Result<u64> {
+        let mut input_sum = 0;
+        for input in &self.inputs {
+            let prev_tx = input.fetch_tx(testnet).await?;
+            input_sum += input.value(&prev_tx);
+        }
+
+        let output_sum: u64 = self.outputs.iter().map(|output| output.amount).sum();
+        Ok(input_sum - output_sum)
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>> {
