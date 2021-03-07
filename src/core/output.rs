@@ -7,8 +7,8 @@ use super::script::Script;
 
 #[derive(Debug, Clone)]
 pub struct Output {
-    amount: u64,
-    script_pubkey: Script,
+    pub(crate) amount: u64,
+    pub(crate) script_pubkey: Script,
 }
 
 impl Output {
