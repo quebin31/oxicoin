@@ -30,7 +30,7 @@ impl Input {
         B: AsRef<[u8]>,
     {
         let prev_tx = Bytes::copy_from_slice(prev_tx.as_ref());
-        let script_sig = Script::new();
+        let script_sig = Script::default();
         let sequence = Self::DEFAULT_SEQUENCE;
 
         Ok(Self {
